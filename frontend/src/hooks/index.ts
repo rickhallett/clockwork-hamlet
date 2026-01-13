@@ -16,3 +16,6 @@ export type {
   GraphNode,
   GraphLink,
 } from './useRelationships'
+
+export { usePoll } from './usePoll'
+export type { Poll, PollOption } from './usePoll'
