@@ -9,3 +9,10 @@ export type {
   AgentMemory,
   AgentGoal,
 } from './useAgent'
+
+export { useRelationships } from './useRelationships'
+export type {
+  RelationshipGraph,
+  GraphNode,
+  GraphLink,
+} from './useRelationships'

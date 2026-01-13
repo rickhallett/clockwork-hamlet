@@ -1,12 +1,7 @@
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { Card, Badge } from '../components/common'
-
-// Placeholder relationship data - will be replaced with API calls
-const relationships = [
-  { source: 'Agnes', target: 'Bob', type: 'friend', score: 5 },
-  { source: 'Agnes', target: 'Martha', type: 'acquaintance', score: 2 },
-  { source: 'Bob', target: 'Martha', type: 'friend', score: 4 },
-  { source: 'Martha', target: 'Agnes', type: 'acquaintance', score: 1 },
-]
+import { ForceGraph, GraphControls } from '../components/graph'
+import { useRelationships } from '../hooks'
 
 function getScoreColor(score: number): 'green' | 'blue' | 'yellow' | 'red' {
   if (score >= 5) return 'green'
@@ -24,6 +19,44 @@ function getScoreLabel(score: number): string {
 }
 
 export function Relationships() {
+  const { graph, isLoading, error } = useRelationships()
+  const [activeTypes, setActiveTypes] = useState<string[]>([])
+  const [selectedNode, setSelectedNode] = useState<string | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [dimensions, setDimensions] = useState({ width: 800, height: 400 })
+
+  // Update dimensions based on container size
+  useEffect(() => {
+    const updateDimensions = () => {
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect()
+        setDimensions({
+          width: rect.width,
+          height: Math.max(400, Math.min(600, rect.width * 0.5)),
+        })
+      }
+    }
+
+    updateDimensions()
+    window.addEventListener('resize', updateDimensions)
+    return () => window.removeEventListener('resize', updateDimensions)
+  }, [])
+
+  const handleToggleType = useCallback((type: string) => {
+    setActiveTypes((prev) =>
+      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
+    )
+  }, [])
+
+  const handleClearSelection = useCallback(() => {
+    setSelectedNode(null)
+  }, [])
+
+  // Filter relationships for the list view
+  const filteredRelationships = graph?.links.filter((link) =>
+    activeTypes.length === 0 || activeTypes.includes(link.type)
+  ) || []
+
   return (
     <div className="space-y-6">
       <div>
@@ -33,53 +66,92 @@ export function Relationships() {
         </p>
       </div>
 
-      {/* Placeholder for graph visualization */}
-      <Card className="min-h-[400px] flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-accent-cyan/20 rounded-full mx-auto mb-4 flex items-center justify-center">
-            <svg
-              className="w-8 h-8 text-accent-cyan"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-              />
-            </svg>
-          </div>
-          <p className="text-fg-dim">
-            Interactive relationship graph coming in Phase 12
-          </p>
+      <GraphControls
+        activeTypes={activeTypes}
+        onToggleType={handleToggleType}
+        selectedNode={selectedNode}
+        onClearSelection={handleClearSelection}
+      />
+
+      {/* Graph visualization */}
+      <Card className="overflow-hidden">
+        <div ref={containerRef} className="w-full">
+          {isLoading ? (
+            <div className="h-[400px] flex items-center justify-center">
+              <div className="animate-pulse text-fg-dim">Loading relationships...</div>
+            </div>
+          ) : graph ? (
+            <ForceGraph
+              graph={graph}
+              selectedNode={selectedNode}
+              onNodeClick={setSelectedNode}
+              filterTypes={activeTypes}
+              width={dimensions.width}
+              height={dimensions.height}
+            />
+          ) : (
+            <div className="h-[400px] flex items-center justify-center">
+              <p className="text-fg-dim">{error || 'No relationship data available'}</p>
+            </div>
+          )}
         </div>
       </Card>
+
+      {/* Legend */}
+      <div className="flex items-center gap-6 text-sm">
+        <span className="text-fg-dim">Edge colors:</span>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-0.5 bg-accent-green" />
+          <span className="text-fg-secondary">Close (+5)</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-0.5 bg-accent-blue" />
+          <span className="text-fg-secondary">Friends (+2)</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-0.5 bg-accent-yellow" />
+          <span className="text-fg-secondary">Neutral</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-0.5 bg-accent-red" />
+          <span className="text-fg-secondary">Hostile</span>
+        </div>
+      </div>
 
       {/* Relationship list */}
       <div>
         <h2 className="text-lg font-semibold text-fg-primary mb-4">All Relationships</h2>
         <div className="space-y-3">
-          {relationships.map((rel, idx) => (
-            <Card key={idx} className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-accent-magenta font-medium">{rel.source}</span>
-                  <span className="text-fg-dim">→</span>
-                  <span className="text-accent-cyan font-medium">{rel.target}</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <Badge variant={getScoreColor(rel.score)}>
-                  {getScoreLabel(rel.score)}
-                </Badge>
-                <span className="text-fg-dim text-sm w-8 text-right">
-                  {rel.score > 0 ? '+' : ''}{rel.score}
-                </span>
-              </div>
-            </Card>
-          ))}
+          {filteredRelationships.length > 0 ? (
+            filteredRelationships.map((rel, idx) => {
+              const sourceId = typeof rel.source === 'string' ? rel.source : rel.source
+              const targetId = typeof rel.target === 'string' ? rel.target : rel.target
+              const sourceName = graph?.nodes.find((n) => n.id === sourceId)?.name || sourceId
+              const targetName = graph?.nodes.find((n) => n.id === targetId)?.name || targetId
+
+              return (
+                <Card key={idx} className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-accent-magenta font-medium">{sourceName}</span>
+                      <span className="text-fg-dim">\u2192</span>
+                      <span className="text-accent-cyan font-medium">{targetName}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Badge variant={getScoreColor(rel.score)}>
+                      {getScoreLabel(rel.score)}
+                    </Badge>
+                    <span className="text-fg-dim text-sm w-8 text-right">
+                      {rel.score > 0 ? '+' : ''}{rel.score}
+                    </span>
+                  </div>
+                </Card>
+              )
+            })
+          ) : (
+            <p className="text-fg-dim text-center py-4">No relationships to display</p>
+          )}
         </div>
       </div>
     </div>
