@@ -1,7 +1,9 @@
 import { Link, useParams } from 'react-router-dom'
-import { Card, CardGrid, Badge, Terminal } from '../components/common'
+import { Card, CardGrid, Badge } from '../components/common'
+import { TraitBars, RelationshipList, MemoryLog, GoalList } from '../components/agent'
+import { useAgent } from '../hooks'
 
-// Placeholder agent data - will be replaced with API calls
+// Placeholder agent data for list - will be replaced with API hook
 const agents = [
   { id: 'agnes', name: 'Agnes Thornbury', state: 'idle', location: 'Bakery' },
   { id: 'bob', name: 'Bob Fletcher', state: 'idle', location: 'Town Square' },
@@ -45,12 +47,49 @@ export function AgentList() {
 
 export function AgentProfile() {
   const { agentId } = useParams<{ agentId: string }>()
-  const agent = agents.find((a) => a.id === agentId)
+  const { agent, isLoading, error } = useAgent(agentId)
 
-  if (!agent) {
+  // Fallback to placeholder if API unavailable
+  const placeholderAgent = agents.find((a) => a.id === agentId)
+
+  if (isLoading) {
     return (
       <div className="text-center py-12">
-        <p className="text-fg-dim">Agent not found</p>
+        <div className="animate-pulse">
+          <div className="w-20 h-20 bg-bg-highlight rounded-full mx-auto mb-4" />
+          <div className="h-6 bg-bg-highlight rounded w-48 mx-auto mb-2" />
+          <div className="h-4 bg-bg-highlight rounded w-32 mx-auto" />
+        </div>
+      </div>
+    )
+  }
+
+  // Use API data if available, otherwise use placeholder
+  const displayAgent = agent || (placeholderAgent ? {
+    id: placeholderAgent.id,
+    name: placeholderAgent.name,
+    personality: 'A villager of Clockwork Hamlet',
+    state: placeholderAgent.state,
+    location_id: placeholderAgent.id,
+    location_name: placeholderAgent.location,
+    traits: {
+      curiosity: 0.6,
+      empathy: 0.7,
+      ambition: 0.5,
+      courage: 0.4,
+      sociability: 0.8,
+    },
+    relationships: [],
+    memories: [],
+    goals: [],
+  } : null)
+
+  if (!displayAgent) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-fg-dim mb-4">
+          {error || 'Agent not found'}
+        </p>
         <Link to="/agents" className="text-accent-blue hover:text-accent-cyan">
           ← Back to agents
         </Link>
@@ -72,38 +111,38 @@ export function AgentProfile() {
           <div className="text-center">
             <div className="w-20 h-20 bg-accent-magenta/20 rounded-full mx-auto mb-4 flex items-center justify-center">
               <span className="text-2xl text-accent-magenta font-bold">
-                {agent.name.charAt(0)}
+                {displayAgent.name.charAt(0)}
               </span>
             </div>
-            <h1 className="text-xl font-bold text-fg-primary">{agent.name}</h1>
-            <p className="text-fg-dim text-sm">{agent.location}</p>
-            <Badge variant="green" className="mt-2">{agent.state}</Badge>
+            <h1 className="text-xl font-bold text-fg-primary">{displayAgent.name}</h1>
+            <p className="text-fg-dim text-sm">{displayAgent.location_name}</p>
+            <Badge variant={displayAgent.state === 'idle' ? 'green' : 'yellow'} className="mt-2">
+              {displayAgent.state}
+            </Badge>
+
+            {displayAgent.personality && (
+              <p className="text-fg-secondary text-sm mt-4 italic">
+                "{displayAgent.personality}"
+              </p>
+            )}
           </div>
         </Card>
 
         {/* Stats and info */}
         <div className="lg:col-span-2 space-y-4">
           <Card title="Personality Traits">
-            <div className="space-y-3">
-              {['Curiosity', 'Empathy', 'Ambition', 'Courage'].map((trait) => (
-                <div key={trait} className="flex items-center gap-3">
-                  <span className="text-fg-secondary w-24 text-sm">{trait}</span>
-                  <div className="flex-1 bg-bg-highlight rounded-full h-2">
-                    <div
-                      className="bg-accent-blue rounded-full h-2"
-                      style={{ width: `${Math.random() * 60 + 40}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
+            <TraitBars traits={displayAgent.traits} />
           </Card>
 
-          <Terminal title="recent_memories.log">
-            <div className="space-y-1 text-sm">
-              <p className="text-fg-dim">No recent memories</p>
-            </div>
-          </Terminal>
+          <Card title="Relationships">
+            <RelationshipList relationships={displayAgent.relationships} />
+          </Card>
+
+          <Card title="Active Goals">
+            <GoalList goals={displayAgent.goals} />
+          </Card>
+
+          <MemoryLog memories={displayAgent.memories} />
         </div>
       </div>
     </div>
