@@ -11,6 +11,7 @@ from hamlet.api import (
     locations_router,
     polls_router,
     relationships_router,
+    stream_router,
     world_router,
 )
 from hamlet.config import settings
@@ -38,6 +39,7 @@ app.include_router(events_router)
 app.include_router(relationships_router)
 app.include_router(polls_router)
 app.include_router(digest_router)
+app.include_router(stream_router)
 
 
 @app.get("/")
