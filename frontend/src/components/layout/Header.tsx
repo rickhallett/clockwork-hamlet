@@ -45,6 +45,7 @@ export function Header() {
             <NavLink to="/feed">Live Feed</NavLink>
             <NavLink to="/agents">Agents</NavLink>
             <NavLink to="/relationships">Relationships</NavLink>
+            <NavLink to="/digest">Digest</NavLink>
           </nav>
 
           {/* Status indicator */}

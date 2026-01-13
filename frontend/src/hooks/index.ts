@@ -19,3 +19,6 @@ export type {
 
 export { usePoll } from './usePoll'
 export type { Poll, PollOption } from './usePoll'
+
+export { useDigest } from './useDigest'
+export type { Digest, DigestHighlight } from './useDigest'
