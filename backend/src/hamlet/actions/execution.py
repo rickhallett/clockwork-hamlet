@@ -171,6 +171,7 @@ def execute_drop(action: Action, actor: Agent, world: World) -> ActionResult:
     item = action.target_object
 
     # Remove from inventory
+    # CLAUDE: why does this pattern below repeat in many functions? does this serve a benefit over actor.inventory_list.remove(item) ?
     inventory = actor.inventory_list
     inventory.remove(item)
     actor.inventory_list = inventory
