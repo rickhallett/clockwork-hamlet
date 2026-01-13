@@ -28,7 +28,7 @@ class LocationResponse(BaseModel):
     connections: list[str]
     objects: list[str]
     capacity: int
-    agent_count: int = 0
+    agents_present: list[str] = []
 
     class Config:
         from_attributes = True

@@ -5,6 +5,7 @@ from hamlet.memory.context import build_memory_context
 from hamlet.memory.manager import (
     MemoryManager,
     add_memory,
+    get_all_memories,
     get_longterm_memories,
     get_recent_memories,
     get_working_memories,
@@ -18,6 +19,7 @@ __all__ = [
     # Manager
     "MemoryManager",
     "add_memory",
+    "get_all_memories",
     "get_working_memories",
     "get_recent_memories",
     "get_longterm_memories",

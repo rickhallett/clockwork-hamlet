@@ -4,6 +4,15 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from hamlet.api import (
+    agents_router,
+    digest_router,
+    events_router,
+    locations_router,
+    polls_router,
+    relationships_router,
+    world_router,
+)
 from hamlet.config import settings
 
 app = FastAPI(
@@ -20,6 +29,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include API routers
+app.include_router(world_router)
+app.include_router(agents_router)
+app.include_router(locations_router)
+app.include_router(events_router)
+app.include_router(relationships_router)
+app.include_router(polls_router)
+app.include_router(digest_router)
 
 
 @app.get("/")

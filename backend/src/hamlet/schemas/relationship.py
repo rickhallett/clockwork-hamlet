@@ -22,10 +22,35 @@ class RelationshipResponse(BaseModel):
 
     id: int
     agent_id: str
+    agent_name: str | None = None
     target_id: str
+    target_name: str | None = None
     type: str
     score: int
     history: list[str]
 
     class Config:
         from_attributes = True
+
+
+class RelationshipGraphNode(BaseModel):
+    """Node in the relationship graph."""
+
+    id: str
+    name: str
+
+
+class RelationshipGraphEdge(BaseModel):
+    """Edge in the relationship graph."""
+
+    source: str
+    target: str
+    type: str
+    score: int
+
+
+class RelationshipGraphResponse(BaseModel):
+    """Full relationship graph response."""
+
+    nodes: list[RelationshipGraphNode]
+    edges: list[RelationshipGraphEdge]

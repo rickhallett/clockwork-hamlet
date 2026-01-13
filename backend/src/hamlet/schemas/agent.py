@@ -39,13 +39,19 @@ class AgentCreate(AgentBase):
 
 
 class AgentResponse(BaseModel):
-    """Schema for agent list response."""
+    """Schema for agent response."""
 
     id: str
     name: str
+    personality_prompt: str | None = None
+    traits: dict = {}
     location_id: str | None
+    inventory: list[str] = []
+    mood: dict = {}
     state: str
-    mood: MoodSchema
+    hunger: float = 0.0
+    energy: float = 10.0
+    social: float = 5.0
 
     class Config:
         from_attributes = True
