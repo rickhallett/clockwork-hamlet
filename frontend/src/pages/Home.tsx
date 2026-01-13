@@ -62,10 +62,11 @@ export function Home() {
                 subtitle="Meet the villagers"
                 hoverable
               >
-                <div className="flex gap-2 mb-3">
+                <div className="flex gap-2 mb-3 flex-wrap">
                   <Badge variant="green">Agnes</Badge>
                   <Badge variant="blue">Bob</Badge>
                   <Badge variant="magenta">Martha</Badge>
+                  <Badge variant="cyan">+7 more</Badge>
                 </div>
                 <Link to="/agents" className="text-accent-blue hover:text-accent-cyan">
                   View all agents →

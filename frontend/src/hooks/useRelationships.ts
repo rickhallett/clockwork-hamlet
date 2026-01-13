@@ -31,13 +31,28 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const PLACEHOLDER_GRAPH: RelationshipGraph = {
   nodes: [
     { id: 'agnes', name: 'Agnes Thornbury', location: 'Bakery' },
-    { id: 'bob', name: 'Bob Fletcher', location: 'Town Square' },
-    { id: 'martha', name: 'Martha Greenwood', location: 'Tavern' },
+    { id: 'bob', name: 'Bob Millwright', location: 'Garden' },
+    { id: 'martha', name: 'Martha Hendricks', location: 'Town Square' },
+    { id: 'edmund', name: 'Edmund Blackwood', location: 'Blacksmith' },
+    { id: 'rosalind', name: 'Rosalind Fairweather', location: 'Inn' },
+    { id: 'father_cornelius', name: 'Father Cornelius', location: 'Church' },
+    { id: 'theodore', name: 'Theodore Hendricks', location: "Mayor's House" },
+    { id: 'eliza', name: 'Eliza Thornbury', location: 'Bakery' },
+    { id: 'william', name: 'Old Will Cooper', location: 'Tavern' },
+    { id: 'thomas', name: 'Thomas Ashford', location: 'Tavern' },
   ],
   links: [
-    { source: 'agnes', target: 'bob', type: 'friend', score: 5 },
-    { source: 'agnes', target: 'martha', type: 'acquaintance', score: 2 },
-    { source: 'bob', target: 'martha', type: 'friend', score: 4 },
+    { source: 'agnes', target: 'martha', type: 'friend', score: 7 },
+    { source: 'agnes', target: 'eliza', type: 'family', score: 8 },
+    { source: 'agnes', target: 'bob', type: 'acquaintance', score: 4 },
+    { source: 'agnes', target: 'thomas', type: 'friend', score: 5 },
+    { source: 'martha', target: 'theodore', type: 'spouse', score: 6 },
+    { source: 'bob', target: 'william', type: 'friend', score: 5 },
+    { source: 'thomas', target: 'agnes', type: 'friend', score: 7 },
+    { source: 'rosalind', target: 'edmund', type: 'acquaintance', score: 6 },
+    { source: 'father_cornelius', target: 'eliza', type: 'acquaintance', score: 1 },
+    { source: 'edmund', target: 'theodore', type: 'acquaintance', score: -1 },
+    { source: 'william', target: 'father_cornelius', type: 'friend', score: 6 },
   ],
 }
 

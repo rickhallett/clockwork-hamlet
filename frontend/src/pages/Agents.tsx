@@ -5,9 +5,16 @@ import { useAgent } from '../hooks'
 
 // Placeholder agent data for list - will be replaced with API hook
 const agents = [
-  { id: 'agnes', name: 'Agnes Thornbury', state: 'idle', location: 'Bakery' },
-  { id: 'bob', name: 'Bob Fletcher', state: 'idle', location: 'Town Square' },
-  { id: 'martha', name: 'Martha Greenwood', state: 'idle', location: 'Tavern' },
+  { id: 'agnes', name: 'Agnes Thornbury', state: 'idle', location: 'The Warm Hearth Bakery' },
+  { id: 'bob', name: 'Bob Millwright', state: 'idle', location: 'Village Garden' },
+  { id: 'martha', name: 'Martha Hendricks', state: 'idle', location: 'Town Square' },
+  { id: 'edmund', name: 'Edmund Blackwood', state: 'idle', location: 'The Anvil & Ember' },
+  { id: 'rosalind', name: 'Rosalind Fairweather', state: 'idle', location: 'The Weary Traveler Inn' },
+  { id: 'father_cornelius', name: 'Father Cornelius', state: 'idle', location: "St. Aldhelm's Church" },
+  { id: 'theodore', name: 'Theodore Hendricks', state: 'idle', location: "The Mayor's Residence" },
+  { id: 'eliza', name: 'Eliza Thornbury', state: 'idle', location: 'The Warm Hearth Bakery' },
+  { id: 'william', name: "William 'Old Will' Cooper", state: 'idle', location: 'The Rusty Tankard' },
+  { id: 'thomas', name: 'Thomas Ashford', state: 'idle', location: 'The Rusty Tankard' },
 ]
 
 export function AgentList() {
