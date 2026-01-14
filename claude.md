@@ -141,6 +141,44 @@ git commit -m "[AUTH-3] Add Google OAuth provider"
 ticket done AUTH-3
 ```
 
+## Multi-Agent Development (IMPORTANT)
+
+**This project uses parallel agentic development.** Multiple Claude Code instances may be working simultaneously.
+
+### First Thing: Run Briefing
+```bash
+/briefing
+```
+This orients you to current activity and available work.
+
+### Coordination System
+
+- **`.claude/ACTIVE_WORK.md`** - Registry of active agents and their tracks
+- **`AGENTIC_ROADMAP.md`** - Master plan with phases and dependencies
+
+### Before Starting Work
+1. Check `.claude/ACTIVE_WORK.md` for active agents
+2. Pick an available track (don't conflict with others)
+3. Register yourself in ACTIVE_WORK.md
+4. Use `/feature-start TICKET-ID` to begin
+
+### Track Ownership
+Each agent owns ONE track. Never work on another agent's files:
+- Track A (FEED): `frontend/src/components/feed/*`
+- Track B (POLL): `backend/src/hamlet/api/polls.py`
+- Track C (LIFE): `backend/src/hamlet/llm/`, `backend/src/hamlet/simulation/`
+- See ACTIVE_WORK.md for full mapping
+
+### Slash Commands for Workflow
+| Command | Purpose |
+|---------|---------|
+| `/briefing` | Orient to current state (run first) |
+| `/feature-start TICKET` | Start work on a ticket |
+| `/feature-complete TICKET` | Complete and hand off |
+| `/verify-branch` | Pre-merge checks |
+| `/run-tests` | Execute test suite |
+| `/sync-tickets` | Sync ticket status with git |
+
 ## Key Files
 
 - `backend/src/hamlet/main.py` - FastAPI app entry, lifespan, routers
