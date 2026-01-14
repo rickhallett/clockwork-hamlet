@@ -24,7 +24,7 @@ Format:
 | Track | Ticket | Branch | Agent Session | Started | Status |
 |-------|--------|--------|---------------|---------|--------|
 | F | POLL-9 | feat/poll/agent-voting | claude-opus | 2026-01-14 | complete |
-| H | FEED-8,9 | feat/feed/export-csv | claude-opus | 2026-01-14 | starting |
+| H | FEED-8,9 | feat/feed/export-csv | claude-opus | 2026-01-14 | complete |
 
 ---
 
