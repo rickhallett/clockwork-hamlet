@@ -28,3 +28,16 @@ export type { Digest, DigestHighlight } from './useDigest'
 
 export { useLocations } from './useLocations'
 export type { Location } from './useLocations'
+
+// Real-time dashboard hooks (DASH-13, 14, 15, 16)
+export { useRealtimeAgents } from './useRealtimeAgents'
+export type { RealtimeAgent } from './useRealtimeAgents'
+
+export { useLLMCostTracker } from './useLLMCostTracker'
+export type { LLMCall, LLMTotals } from './useLLMCostTracker'
+
+export { useSimulationHealth } from './useSimulationHealth'
+export type { SimulationHealth } from './useSimulationHealth'
+
+export { useEventRateTracker } from './useEventRateTracker'
+export type { EventRatePoint } from './useEventRateTracker'

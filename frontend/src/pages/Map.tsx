@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect } from 'react'
 import { Card } from '../components/common'
 import { VillageMap, LocationDetail } from '../components/map'
-import { useLocations, useAgents } from '../hooks'
+import { useLocations, useRealtimeAgents } from '../hooks'
 
 export function Map() {
   const { locations, isLoading: locationsLoading, error: locationsError } = useLocations()
-  const { agents, isLoading: agentsLoading } = useAgents()
+  // Use real-time agents hook for live position updates (DASH-13)
+  const { agents, isLoading: agentsLoading, isConnected, lastUpdate } = useRealtimeAgents()
   const [selectedLocation, setSelectedLocation] = useState<string | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [dimensions, setDimensions] = useState({ width: 600, height: 500 })
@@ -35,11 +36,29 @@ export function Map() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-fg-primary mb-2">Village Map</h1>
-        <p className="text-fg-secondary">
-          Explore Clockwork Hamlet. Click on a location to see who&apos;s there.
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-fg-primary mb-2">Village Map</h1>
+          <p className="text-fg-secondary">
+            Explore Clockwork Hamlet. Click on a location to see who&apos;s there.
+          </p>
+        </div>
+        {/* Real-time connection indicator (DASH-13) */}
+        <div className="flex items-center gap-2 text-sm">
+          <span
+            className={`w-2 h-2 rounded-full ${
+              isConnected ? 'bg-accent-green animate-pulse' : 'bg-accent-red'
+            }`}
+          />
+          <span className="text-fg-dim">
+            {isConnected ? 'Live' : 'Offline'}
+          </span>
+          {lastUpdate && (
+            <span className="text-fg-dim text-xs">
+              Updated {new Date(lastUpdate).toLocaleTimeString()}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Legend */}
