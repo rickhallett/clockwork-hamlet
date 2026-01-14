@@ -57,3 +57,37 @@ class EventPage(BaseModel):
         default=None,
         description="Total count of events matching filters (optional, may be omitted for performance).",
     )
+
+
+class ArchiveStats(BaseModel):
+    """Statistics about the event archive for FEED-9."""
+
+    total_events: int = Field(description="Total number of archived events")
+    oldest_timestamp: int | None = Field(
+        default=None, description="Timestamp of oldest event"
+    )
+    newest_timestamp: int | None = Field(
+        default=None, description="Timestamp of newest event"
+    )
+    event_types: dict[str, int] = Field(
+        default_factory=dict, description="Count of events by type"
+    )
+    date_range_days: int = Field(
+        default=0, description="Number of days covered by archive"
+    )
+
+
+class FeedModeInfo(BaseModel):
+    """Information about feed mode for FEED-9.
+
+    Provides metadata to help clients understand the current feed mode
+    and what data is available.
+    """
+
+    mode: str = Field(description="Current feed mode: 'live' or 'archive'")
+    archive_stats: ArchiveStats | None = Field(
+        default=None, description="Archive statistics when in archive mode"
+    )
+    live_connected: bool = Field(
+        default=False, description="Whether live streaming is available"
+    )
