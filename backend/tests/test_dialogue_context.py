@@ -18,6 +18,7 @@ from hamlet.db import Agent, Memory, Relationship
 from hamlet.llm.context import (
     build_dialogue_prompt,
     get_relationship_subtext,
+    get_running_joke_hints,
     get_shared_memory_hint,
     get_trait_voice_hints,
 )
@@ -519,3 +520,237 @@ class TestBuildDialoguePrompt:
 
         assert "SITUATION:" in prompt
         assert "argument" in prompt
+
+    def test_includes_running_jokes_for_positive_relationship(self, world, agent, db):
+        """Built prompt includes running jokes section when agents have positive relationship and shared funny memories."""
+        target = world.get_agent("bob")
+
+        # Clear existing memories and relationships
+        db.query(Memory).filter(Memory.agent_id == agent.id).delete()
+        db.query(Relationship).filter(
+            Relationship.agent_id == agent.id, Relationship.target_id == target.id
+        ).delete()
+        db.flush()
+
+        # Create a positive relationship
+        rel = Relationship(
+            agent_id=agent.id,
+            target_id=target.id,
+            type="friend",
+            score=5,
+        )
+        db.add(rel)
+
+        # Add a funny memory mentioning target
+        memory = Memory(
+            agent_id=agent.id,
+            content=f"Had a hilarious time with {target.name} when he tripped into the fountain",
+            significance=7,
+            timestamp=int(time.time()),
+            type="working",
+        )
+        db.add(memory)
+        db.flush()
+
+        prompt = build_dialogue_prompt(agent, target, world)
+
+        assert "RUNNING JOKES" in prompt
+        assert "INSIDE JOKE" in prompt
+        assert "fountain" in prompt.lower()
+
+    def test_no_running_jokes_for_negative_relationship(self, world, agent, db):
+        """Built prompt does not include running jokes for negative relationships."""
+        target = world.get_agent("bob")
+
+        # Clear existing memories and relationships
+        db.query(Memory).filter(Memory.agent_id == agent.id).delete()
+        db.query(Relationship).filter(
+            Relationship.agent_id == agent.id, Relationship.target_id == target.id
+        ).delete()
+        db.flush()
+
+        # Create a negative relationship
+        rel = Relationship(
+            agent_id=agent.id,
+            target_id=target.id,
+            type="rival",
+            score=-3,
+        )
+        db.add(rel)
+
+        # Add a funny memory mentioning target
+        memory = Memory(
+            agent_id=agent.id,
+            content=f"Saw {target.name} fall in an embarrassing way",
+            significance=7,
+            timestamp=int(time.time()),
+            type="working",
+        )
+        db.add(memory)
+        db.flush()
+
+        prompt = build_dialogue_prompt(agent, target, world)
+
+        # Running jokes section should NOT appear for negative relationships
+        assert "RUNNING JOKES" not in prompt
+
+
+@pytest.mark.integration
+class TestRunningJokeHints:
+    """Test get_running_joke_hints() function.
+
+    This function finds funny or highly memorable shared experiences
+    that could be referenced as inside jokes between agents.
+    """
+
+    def test_finds_funny_memory_with_keyword(self, world, agent, db):
+        """Finds memories with funny keywords mentioning the target."""
+        target = world.get_agent("bob")
+
+        # Clear existing memories
+        db.query(Memory).filter(Memory.agent_id == agent.id).delete()
+        db.flush()
+
+        # Add a funny memory mentioning target
+        memory = Memory(
+            agent_id=agent.id,
+            content=f"{target.name} had a hilarious accident with the chicken coop",
+            significance=6,
+            timestamp=int(time.time()),
+            type="working",
+        )
+        db.add(memory)
+        db.flush()
+
+        hint = get_running_joke_hints(agent, target, world)
+
+        assert hint is not None
+        assert "INSIDE JOKE" in hint
+        assert target.name in hint
+        assert "chicken" in hint.lower()
+
+    def test_finds_embarrassing_memory(self, world, agent, db):
+        """Finds memories with embarrassing situations."""
+        target = world.get_agent("bob")
+
+        # Clear existing memories
+        db.query(Memory).filter(Memory.agent_id == agent.id).delete()
+        db.flush()
+
+        # Add an embarrassing memory
+        memory = Memory(
+            agent_id=agent.id,
+            content=f"{target.name} tripped and spilled soup everywhere",
+            significance=6,
+            timestamp=int(time.time()),
+            type="working",
+        )
+        db.add(memory)
+        db.flush()
+
+        hint = get_running_joke_hints(agent, target, world)
+
+        assert hint is not None
+        assert "INSIDE JOKE" in hint
+        assert "soup" in hint.lower()
+
+    def test_finds_high_significance_memorable_event(self, world, agent, db):
+        """High significance memories (>=8) are treated as memorable events."""
+        target = world.get_agent("bob")
+
+        # Clear existing memories
+        db.query(Memory).filter(Memory.agent_id == agent.id).delete()
+        db.flush()
+
+        # Add a highly significant memory without funny keywords
+        memory = Memory(
+            agent_id=agent.id,
+            content=f"{target.name} and I saved the village during the storm",
+            significance=9,
+            timestamp=int(time.time()),
+            type="working",
+        )
+        db.add(memory)
+        db.flush()
+
+        hint = get_running_joke_hints(agent, target, world)
+
+        assert hint is not None
+        assert "SHARED MOMENT" in hint
+        assert "storm" in hint.lower()
+
+    def test_limits_to_two_jokes(self, world, agent, db):
+        """Only returns up to two running jokes."""
+        target = world.get_agent("bob")
+
+        # Clear existing memories
+        db.query(Memory).filter(Memory.agent_id == agent.id).delete()
+        db.flush()
+
+        now = int(time.time())
+
+        # Add multiple funny memories
+        for i in range(5):
+            memory = Memory(
+                agent_id=agent.id,
+                content=f"Funny incident {i}: {target.name} did something hilarious",
+                significance=7,
+                timestamp=now - i * 100,
+                type="working",
+            )
+            db.add(memory)
+        db.flush()
+
+        hint = get_running_joke_hints(agent, target, world)
+
+        assert hint is not None
+        # Count how many INSIDE JOKE lines there are
+        joke_count = hint.count("INSIDE JOKE")
+        assert joke_count <= 2
+
+    def test_returns_none_when_no_joke_material(self, world, agent, db):
+        """Returns None when no memories qualify as joke material."""
+        target = world.get_agent("bob")
+
+        # Clear existing memories
+        db.query(Memory).filter(Memory.agent_id == agent.id).delete()
+        db.flush()
+
+        # Add a boring, low-significance memory mentioning target
+        memory = Memory(
+            agent_id=agent.id,
+            content=f"Saw {target.name} at the market today",
+            significance=4,
+            timestamp=int(time.time()),
+            type="working",
+        )
+        db.add(memory)
+        db.flush()
+
+        hint = get_running_joke_hints(agent, target, world)
+
+        assert hint is None
+
+    def test_ignores_memories_not_mentioning_target(self, world, agent, db):
+        """Only considers memories that mention the target."""
+        target = world.get_agent("bob")
+
+        # Clear existing memories
+        db.query(Memory).filter(Memory.agent_id == agent.id).delete()
+        db.flush()
+
+        # Add a funny memory NOT mentioning target
+        memory = Memory(
+            agent_id=agent.id,
+            content="Something hilarious happened with a chicken",
+            significance=7,
+            timestamp=int(time.time()),
+            type="working",
+        )
+        db.add(memory)
+        db.flush()
+
+        hint = get_running_joke_hints(agent, target, world)
+
+        # Should be None because the memory doesn't mention Bob
+        assert hint is None

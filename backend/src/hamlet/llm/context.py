@@ -348,6 +348,96 @@ def get_relationship_subtext(agent: Agent, target: Agent, rel: Relationship | No
     return ". ".join(subtext_parts)
 
 
+def get_running_joke_hints(agent: Agent, target: Agent, world: World) -> str | None:
+    """Generate running joke hints based on shared memorable experiences.
+
+    Looks for funny, embarrassing, or highly memorable shared moments
+    that could be referenced as inside jokes between agents.
+
+    Args:
+        agent: The agent generating dialogue
+        target: The agent being spoken to
+        world: The world containing the database
+
+    Returns:
+        Hints about inside jokes to reference, or None if no joke material exists
+    """
+    db = world.db
+
+    # Keywords that suggest funny or memorable moments
+    funny_keywords = [
+        "funny", "hilarious", "laugh", "absurd", "ridiculous",
+        "embarrass", "awkward", "strange", "weird", "unusual",
+        "failed", "disaster", "mishap", "accident", "fell",
+        "tripped", "spilled", "broke", "forgot", "lost",
+        "confused", "mix-up",
+    ]
+
+    # Query agent's memories, ordered by significance then recency
+    memories = (
+        db.query(Memory)
+        .filter(Memory.agent_id == agent.id)
+        .order_by(Memory.significance.desc(), Memory.timestamp.desc())
+        .limit(100)  # Check a larger set for joke material
+        .all()
+    )
+
+    # Filter for memories mentioning the target that are joke-worthy
+    target_name = target.name
+    running_jokes = []
+
+    for memory in memories:
+        content_lower = memory.content.lower()
+
+        # Must mention the target
+        if target_name.lower() not in content_lower:
+            continue
+
+        # Check if this memory has joke potential
+        is_joke_material = False
+        joke_type = None
+
+        # Check for funny keywords
+        for keyword in funny_keywords:
+            if keyword in content_lower:
+                is_joke_material = True
+                joke_type = "funny_memory"
+                break
+
+        # High significance memories are memorable enough to reference
+        if memory.significance >= 8 and not is_joke_material:
+            is_joke_material = True
+            joke_type = "memorable_event"
+
+        if is_joke_material:
+            running_jokes.append({
+                "content": memory.content,
+                "type": joke_type,
+                "significance": memory.significance,
+            })
+            if len(running_jokes) >= 2:  # Limit to 2 running jokes
+                break
+
+    if not running_jokes:
+        return None
+
+    # Build hints for inside jokes
+    hints = []
+    for joke in running_jokes:
+        if joke["type"] == "funny_memory":
+            hints.append(
+                f"INSIDE JOKE: You might tease {target.name} about: {joke['content']} "
+                "(reference it playfully or with a knowing look)"
+            )
+        else:
+            hints.append(
+                f"SHARED MOMENT: You both remember: {joke['content']} "
+                "(you might reference this with a smile or meaningful glance)"
+            )
+
+    return "\n".join(hints)
+
+
 def build_dialogue_prompt(
     agent: Agent,
     target: Agent,
@@ -370,6 +460,11 @@ def build_dialogue_prompt(
 
     # Shared memory hints
     shared_memory_hint = get_shared_memory_hint(agent, target, world)
+
+    # Running joke hints (for agents who are at least acquaintances)
+    running_joke_hints = None
+    if rel and rel.score >= 0:  # Only for non-negative relationships
+        running_joke_hints = get_running_joke_hints(agent, target, world)
 
     # Voice hints based on personality
     voice_hints = get_trait_voice_hints(agent)
@@ -394,11 +489,19 @@ SHARED HISTORY (you may naturally reference past interactions):
 {shared_memory_hint}
 """
 
+    # Build running jokes section
+    running_jokes_section = ""
+    if running_joke_hints:
+        running_jokes_section = f"""
+RUNNING JOKES (inside jokes you share with {target.name}):
+{running_joke_hints}
+"""
+
     prompt = f"""{agent_context}
 
 SPEAKING TO: {target.name}
 {relationship_subtext}
-{shared_history_section}
+{shared_history_section}{running_jokes_section}
 YOUR VOICE: {voice_hints}
 {mood_influence}
 
