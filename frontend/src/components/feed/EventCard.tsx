@@ -45,6 +45,29 @@ function getEventIcon(type: string): string {
   }
 }
 
+interface SignificanceIndicatorProps {
+  level: 1 | 2 | 3
+}
+
+function SignificanceIndicator({ level }: SignificanceIndicatorProps) {
+  // Level 1: Minor event (default, subtle)
+  // Level 2: Notable event (medium emphasis)
+  // Level 3: Major event (high emphasis)
+  const config = {
+    1: { icon: '\u2022', color: 'text-fg-dim', title: 'Minor' }, // •
+    2: { icon: '\u25C6', color: 'text-accent-yellow', title: 'Notable' }, // ◆
+    3: { icon: '\u2605', color: 'text-accent-red', title: 'Major' }, // ★
+  }
+
+  const { icon, color, title } = config[level]
+
+  return (
+    <span className={`${color} text-xs`} title={`${title} event`}>
+      {icon}
+    </span>
+  )
+}
+
 function formatRelativeTime(timestamp: string): string {
   const now = new Date()
   const eventTime = new Date(timestamp)
@@ -90,6 +113,7 @@ export function EventCard({ event }: EventCardProps) {
         </p>
 
         <div className="flex items-center gap-3 mt-1">
+          <SignificanceIndicator level={event.significance} />
           <span className="text-fg-dim text-xs">{relativeTime}</span>
           {event.agent_id && (
             <span className="text-fg-dim text-xs">#{event.agent_id}</span>
