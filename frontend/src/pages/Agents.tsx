@@ -1,23 +1,44 @@
 import { Link, useParams } from 'react-router-dom'
 import { Card, CardGrid, Badge } from '../components/common'
 import { TraitBars, RelationshipList, MemoryLog, GoalList } from '../components/agent'
-import { useAgent } from '../hooks'
-
-// Placeholder agent data for list - will be replaced with API hook
-const agents = [
-  { id: 'agnes', name: 'Agnes Thornbury', state: 'idle', location: 'The Warm Hearth Bakery' },
-  { id: 'bob', name: 'Bob Millwright', state: 'idle', location: 'Village Garden' },
-  { id: 'martha', name: 'Martha Hendricks', state: 'idle', location: 'Town Square' },
-  { id: 'edmund', name: 'Edmund Blackwood', state: 'idle', location: 'The Anvil & Ember' },
-  { id: 'rosalind', name: 'Rosalind Fairweather', state: 'idle', location: 'The Weary Traveler Inn' },
-  { id: 'father_cornelius', name: 'Father Cornelius', state: 'idle', location: "St. Aldhelm's Church" },
-  { id: 'theodore', name: 'Theodore Hendricks', state: 'idle', location: "The Mayor's Residence" },
-  { id: 'eliza', name: 'Eliza Thornbury', state: 'idle', location: 'The Warm Hearth Bakery' },
-  { id: 'william', name: "William 'Old Will' Cooper", state: 'idle', location: 'The Rusty Tankard' },
-  { id: 'thomas', name: 'Thomas Ashford', state: 'idle', location: 'The Rusty Tankard' },
-]
+import { useAgent, useAgents } from '../hooks'
 
 export function AgentList() {
+  const { agents, isLoading, error } = useAgents()
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-fg-primary mb-2">Village Agents</h1>
+          <p className="text-fg-secondary">Loading agents...</p>
+        </div>
+        <CardGrid columns={3}>
+          {[...Array(6)].map((_, i) => (
+            <Card key={i}>
+              <div className="animate-pulse">
+                <div className="h-5 bg-bg-highlight rounded w-32 mb-2" />
+                <div className="h-4 bg-bg-highlight rounded w-24 mb-3" />
+                <div className="h-4 bg-bg-highlight rounded w-20" />
+              </div>
+            </Card>
+          ))}
+        </CardGrid>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-fg-primary mb-2">Village Agents</h1>
+          <p className="text-fg-secondary text-red-400">Error: {error}</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -33,7 +54,7 @@ export function AgentList() {
             <div className="flex items-start justify-between mb-3">
               <div>
                 <h3 className="font-semibold text-fg-primary">{agent.name}</h3>
-                <p className="text-fg-dim text-sm">{agent.location}</p>
+                <p className="text-fg-dim text-sm">{agent.location_name}</p>
               </div>
               <Badge variant={agent.state === 'idle' ? 'green' : 'yellow'}>
                 {agent.state}
@@ -56,9 +77,6 @@ export function AgentProfile() {
   const { agentId } = useParams<{ agentId: string }>()
   const { agent, isLoading, error } = useAgent(agentId)
 
-  // Fallback to placeholder if API unavailable
-  const placeholderAgent = agents.find((a) => a.id === agentId)
-
   if (isLoading) {
     return (
       <div className="text-center py-12">
@@ -71,27 +89,7 @@ export function AgentProfile() {
     )
   }
 
-  // Use API data if available, otherwise use placeholder
-  const displayAgent = agent || (placeholderAgent ? {
-    id: placeholderAgent.id,
-    name: placeholderAgent.name,
-    personality: 'A villager of Clockwork Hamlet',
-    state: placeholderAgent.state,
-    location_id: placeholderAgent.id,
-    location_name: placeholderAgent.location,
-    traits: {
-      curiosity: 0.6,
-      empathy: 0.7,
-      ambition: 0.5,
-      courage: 0.4,
-      sociability: 0.8,
-    },
-    relationships: [],
-    memories: [],
-    goals: [],
-  } : null)
-
-  if (!displayAgent) {
+  if (!agent) {
     return (
       <div className="text-center py-12">
         <p className="text-fg-dim mb-4">
@@ -118,18 +116,18 @@ export function AgentProfile() {
           <div className="text-center">
             <div className="w-20 h-20 bg-accent-magenta/20 rounded-full mx-auto mb-4 flex items-center justify-center">
               <span className="text-2xl text-accent-magenta font-bold">
-                {displayAgent.name.charAt(0)}
+                {agent.name.charAt(0)}
               </span>
             </div>
-            <h1 className="text-xl font-bold text-fg-primary">{displayAgent.name}</h1>
-            <p className="text-fg-dim text-sm">{displayAgent.location_name}</p>
-            <Badge variant={displayAgent.state === 'idle' ? 'green' : 'yellow'} className="mt-2">
-              {displayAgent.state}
+            <h1 className="text-xl font-bold text-fg-primary">{agent.name}</h1>
+            <p className="text-fg-dim text-sm">{agent.location_name}</p>
+            <Badge variant={agent.state === 'idle' ? 'green' : 'yellow'} className="mt-2">
+              {agent.state}
             </Badge>
 
-            {displayAgent.personality && (
+            {agent.personality && (
               <p className="text-fg-secondary text-sm mt-4 italic">
-                "{displayAgent.personality}"
+                "{agent.personality}"
               </p>
             )}
           </div>
@@ -138,18 +136,18 @@ export function AgentProfile() {
         {/* Stats and info */}
         <div className="lg:col-span-2 space-y-4">
           <Card title="Personality Traits">
-            <TraitBars traits={displayAgent.traits} />
+            <TraitBars traits={agent.traits} />
           </Card>
 
           <Card title="Relationships">
-            <RelationshipList relationships={displayAgent.relationships} />
+            <RelationshipList relationships={agent.relationships} />
           </Card>
 
           <Card title="Active Goals">
-            <GoalList goals={displayAgent.goals} />
+            <GoalList goals={agent.goals} />
           </Card>
 
-          <MemoryLog memories={displayAgent.memories} />
+          <MemoryLog memories={agent.memories} />
         </div>
       </div>
     </div>

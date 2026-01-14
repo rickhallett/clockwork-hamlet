@@ -118,16 +118,24 @@ export function useVillageStream(options: UseVillageStreamOptions = {}): UseVill
           // Skip heartbeat events
           if (data.type === 'heartbeat') return
 
+          // Transform backend format to frontend format
+          // Backend sends: actors (string[]), timestamp (int), detail (string)
+          // Frontend expects: agent_id, agent_name, timestamp (ISO string), details
+          const primaryAgent = data.actors?.[0] || data.agent_id
+          const timestamp = typeof data.timestamp === 'number'
+            ? new Date(data.timestamp * 1000).toISOString()
+            : data.timestamp || new Date().toISOString()
+
           const event: VillageEvent = {
             id: data.id || crypto.randomUUID(),
             type: data.type || 'system',
             summary: data.summary || data.description || 'Unknown event',
-            timestamp: data.timestamp || new Date().toISOString(),
-            agent_id: data.agent_id,
-            agent_name: data.agent_name,
+            timestamp,
+            agent_id: primaryAgent,
+            agent_name: data.agent_name || primaryAgent,
             location_id: data.location_id,
-            location_name: data.location_name,
-            details: data.details,
+            location_name: data.location_name || data.location_id,
+            details: data.details || (data.detail ? { detail: data.detail } : data.data),
           }
 
           addEvent(event)

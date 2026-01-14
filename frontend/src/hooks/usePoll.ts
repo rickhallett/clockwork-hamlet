@@ -71,7 +71,26 @@ export function usePoll(): UsePollReturn {
         throw new Error(`Failed to fetch poll: ${response.statusText}`)
       }
       const data = await response.json()
-      setPoll(data)
+      if (!data) {
+        setPoll(null)
+        return
+      }
+      // Transform backend format to frontend format
+      const options: PollOption[] = (data.options || []).map((text: string, idx: number) => ({
+        id: idx,
+        text,
+        votes: data.votes?.[String(idx)] || 0,
+      }))
+      const totalVotes = options.reduce((sum, opt) => sum + opt.votes, 0)
+      setPoll({
+        id: data.id,
+        question: data.question,
+        options,
+        total_votes: totalVotes,
+        is_active: data.status === 'active',
+        ends_at: data.closes_at ? new Date(data.closes_at * 1000).toISOString() : null,
+        created_at: new Date(data.created_at * 1000).toISOString(),
+      })
     } catch (err) {
       // Use placeholder if API fails
       setPoll(PLACEHOLDER_POLL)

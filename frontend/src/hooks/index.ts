@@ -1,6 +1,9 @@
 export { useVillageStream } from './useVillageStream'
 export type { VillageEvent } from './useVillageStream'
 
+export { useAgents } from './useAgents'
+export type { AgentSummary } from './useAgents'
+
 export { useAgent } from './useAgent'
 export type {
   Agent,

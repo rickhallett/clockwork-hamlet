@@ -66,12 +66,16 @@ export function useRelationships(): UseRelationshipsReturn {
     setError(null)
 
     try {
-      const response = await fetch(`${API_URL}/api/relationships/graph`)
+      const response = await fetch(`${API_URL}/api/relationships`)
       if (!response.ok) {
         throw new Error(`Failed to fetch relationships: ${response.statusText}`)
       }
       const data = await response.json()
-      setGraph(data)
+      // Transform backend format (edges) to frontend format (links)
+      setGraph({
+        nodes: data.nodes,
+        links: data.edges || [],
+      })
     } catch (err) {
       // Use placeholder data if API fails
       setGraph(PLACEHOLDER_GRAPH)
