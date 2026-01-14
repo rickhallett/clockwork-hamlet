@@ -240,6 +240,8 @@ class Poll(Base):
     status = Column(String(20), default="active")  # active, closed
     created_at = Column(Integer, nullable=False)  # Unix timestamp
     closes_at = Column(Integer)  # Unix timestamp
+    category = Column(String(50))  # Poll category for filtering
+    tags = Column(Text, default="[]")  # JSON array of tag strings
 
     @property
     def options_list(self) -> list[str]:
@@ -256,6 +258,14 @@ class Poll(Base):
     @votes_dict.setter
     def votes_dict(self, value: dict[str, int]):
         self.votes = json_serializer(value)
+
+    @property
+    def tags_list(self) -> list[str]:
+        return json_deserializer(self.tags) or []
+
+    @tags_list.setter
+    def tags_list(self, value: list[str]):
+        self.tags = json_serializer(value)
 
 
 class WorldState(Base):

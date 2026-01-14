@@ -73,12 +73,15 @@ async def submit_vote(vote: VoteRequest, db: Session = Depends(get_db)):
 @router.get("", response_model=list[PollResponse])
 async def list_polls(
     status: str | None = None,
+    category: str | None = None,
     db: Session = Depends(get_db),
 ):
-    """List all polls, optionally filtered by status."""
+    """List all polls, optionally filtered by status and/or category."""
     query = db.query(Poll)
     if status:
         query = query.filter(Poll.status == status)
+    if category:
+        query = query.filter(Poll.category == category)
     polls = query.order_by(Poll.created_at.desc()).all()
     return [_poll_to_response(p) for p in polls]
 
@@ -93,4 +96,6 @@ def _poll_to_response(poll: Poll) -> PollResponse:
         status=poll.status,
         created_at=poll.created_at,
         closes_at=poll.closes_at,
+        category=poll.category,
+        tags=poll.tags_list,
     )
