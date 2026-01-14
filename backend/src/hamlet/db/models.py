@@ -296,3 +296,51 @@ class LLMUsage(Base):
     cached = Column(Boolean, default=False)
     agent_id = Column(String(50))  # Which agent triggered this call
     call_type = Column(String(30), default="decision")  # decision, dialogue, compression
+
+
+class User(Base):
+    """A user account."""
+
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    username = Column(String(50), unique=True, nullable=False, index=True)
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    hashed_password = Column(String(255), nullable=False)
+    is_active = Column(Boolean, default=True)
+    is_admin = Column(Boolean, default=False)
+    created_at = Column(Float, nullable=False)  # Unix timestamp
+    last_login = Column(Float)  # Unix timestamp
+
+    # User preferences (stored as JSON)
+    preferences = Column(Text, default="{}")
+
+    # Relationships
+    refresh_tokens = relationship(
+        "RefreshToken", back_populates="user", cascade="all, delete-orphan"
+    )
+
+    @property
+    def preferences_dict(self) -> dict:
+        return json_deserializer(self.preferences) or {}
+
+    @preferences_dict.setter
+    def preferences_dict(self, value: dict):
+        self.preferences = json_serializer(value)
+
+
+class RefreshToken(Base):
+    """A refresh token for session management."""
+
+    __tablename__ = "refresh_tokens"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    token = Column(String(255), unique=True, nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(Float, nullable=False)  # Unix timestamp
+    expires_at = Column(Float, nullable=False)  # Unix timestamp
+    revoked = Column(Boolean, default=False)
+    revoked_at = Column(Float)  # Unix timestamp when revoked
+
+    # Relationships
+    user = relationship("User", back_populates="refresh_tokens")

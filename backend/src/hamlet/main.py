@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from hamlet.api import (
     agents_router,
+    auth_router,
     digest_router,
     events_router,
     goals_router,
@@ -151,6 +152,7 @@ app.add_middleware(
 )
 
 # Include API routers
+app.include_router(auth_router)
 app.include_router(world_router)
 app.include_router(agents_router)
 app.include_router(locations_router)
