@@ -1,6 +1,6 @@
 """Relationship schemas."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class RelationshipBase(BaseModel):
@@ -20,6 +20,8 @@ class RelationshipCreate(RelationshipBase):
 class RelationshipResponse(BaseModel):
     """Schema for relationship response."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     agent_id: str
     agent_name: str | None = None
@@ -28,9 +30,6 @@ class RelationshipResponse(BaseModel):
     type: str
     score: int
     history: list[str]
-
-    class Config:
-        from_attributes = True
 
 
 class RelationshipGraphNode(BaseModel):

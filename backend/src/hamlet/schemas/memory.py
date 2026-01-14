@@ -1,6 +1,6 @@
 """Memory schemas."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class MemoryBase(BaseModel):
@@ -21,6 +21,8 @@ class MemoryCreate(MemoryBase):
 class MemoryResponse(BaseModel):
     """Schema for memory response."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     agent_id: str
     timestamp: int
@@ -28,6 +30,3 @@ class MemoryResponse(BaseModel):
     content: str
     significance: int
     compressed: bool
-
-    class Config:
-        from_attributes = True

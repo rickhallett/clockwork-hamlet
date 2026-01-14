@@ -1,6 +1,6 @@
 """Goal schemas."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class GoalBase(BaseModel):
@@ -22,6 +22,8 @@ class GoalCreate(GoalBase):
 class GoalResponse(BaseModel):
     """Schema for goal response."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     agent_id: str
     type: str
@@ -30,6 +32,3 @@ class GoalResponse(BaseModel):
     target_id: str | None
     status: str
     created_at: int
-
-    class Config:
-        from_attributes = True

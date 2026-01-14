@@ -1,10 +1,12 @@
 """World state schemas."""
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class WorldStateResponse(BaseModel):
     """Schema for world state response."""
+
+    model_config = ConfigDict(from_attributes=True)
 
     current_tick: int
     current_day: int
@@ -13,6 +15,3 @@ class WorldStateResponse(BaseModel):
     weather: str
     agent_count: int
     location_count: int
-
-    class Config:
-        from_attributes = True

@@ -1,6 +1,6 @@
 """Poll schemas."""
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class PollBase(BaseModel):
@@ -19,6 +19,8 @@ class PollCreate(PollBase):
 class PollResponse(BaseModel):
     """Schema for poll response."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     question: str
     options: list[str]
@@ -26,9 +28,6 @@ class PollResponse(BaseModel):
     status: str
     created_at: int
     closes_at: int | None
-
-    class Config:
-        from_attributes = True
 
 
 class VoteRequest(BaseModel):

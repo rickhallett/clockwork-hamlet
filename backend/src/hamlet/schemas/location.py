@@ -1,6 +1,6 @@
 """Location schemas."""
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class LocationBase(BaseModel):
@@ -22,6 +22,8 @@ class LocationCreate(LocationBase):
 class LocationResponse(BaseModel):
     """Schema for location response."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     name: str
     description: str | None
@@ -29,6 +31,3 @@ class LocationResponse(BaseModel):
     objects: list[str]
     capacity: int
     agents_present: list[str] = []
-
-    class Config:
-        from_attributes = True

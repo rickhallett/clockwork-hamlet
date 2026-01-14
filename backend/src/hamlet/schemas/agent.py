@@ -1,6 +1,6 @@
 """Agent schemas."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class TraitsSchema(BaseModel):
@@ -41,6 +41,8 @@ class AgentCreate(AgentBase):
 class AgentResponse(BaseModel):
     """Schema for agent response."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     name: str
     personality_prompt: str | None = None
@@ -53,12 +55,11 @@ class AgentResponse(BaseModel):
     energy: float = 10.0
     social: float = 5.0
 
-    class Config:
-        from_attributes = True
-
 
 class AgentDetail(BaseModel):
     """Schema for detailed agent response."""
+
+    model_config = ConfigDict(from_attributes=True)
 
     id: str
     name: str
@@ -71,6 +72,3 @@ class AgentDetail(BaseModel):
     hunger: float
     energy: float
     social: float
-
-    class Config:
-        from_attributes = True

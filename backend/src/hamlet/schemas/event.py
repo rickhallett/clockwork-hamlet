@@ -1,6 +1,6 @@
 """Event schemas."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class EventBase(BaseModel):
@@ -23,6 +23,8 @@ class EventCreate(EventBase):
 class EventResponse(BaseModel):
     """Schema for event response."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     timestamp: int
     type: str
@@ -31,6 +33,3 @@ class EventResponse(BaseModel):
     summary: str
     detail: str | None
     significance: int
-
-    class Config:
-        from_attributes = True
