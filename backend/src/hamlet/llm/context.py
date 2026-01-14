@@ -260,6 +260,64 @@ def get_trait_voice_hints(agent: Agent) -> str:
     return "; ".join(hints) if hints else "You speak in a straightforward manner"
 
 
+def get_wit_hints(agent: Agent) -> str | None:
+    """Generate wit/humor hints for agents with high charm or curiosity.
+
+    High charm agents make clever, witty observations and playful remarks.
+    High curiosity agents make insightful observations and clever connections.
+    Agents with both traits are particularly sharp and entertaining.
+
+    Args:
+        agent: The agent to generate wit hints for
+
+    Returns:
+        A string of wit hints if the agent has high charm or curiosity,
+        None otherwise
+    """
+    traits = agent.traits_dict
+    charm = traits.get("charm", 5)
+    curiosity = traits.get("curiosity", 5)
+
+    wit_hints = []
+
+    # High charm (>=7) - clever, playful wit
+    if charm >= 7:
+        if charm >= 9:
+            wit_hints.append(
+                "You have a gift for witty banter - your remarks are clever, "
+                "well-timed, and make people smile"
+            )
+        else:
+            wit_hints.append(
+                "You enjoy making clever observations and playful remarks "
+                "that lighten the mood"
+            )
+
+    # High curiosity (>=7) - insightful, observational humor
+    if curiosity >= 7:
+        if curiosity >= 9:
+            wit_hints.append(
+                "You notice things others miss and can't help making clever "
+                "connections - your insights often have a humorous edge"
+            )
+        else:
+            wit_hints.append(
+                "Your curiosity leads you to make interesting observations "
+                "that sometimes come out as wry comments"
+            )
+
+    # Combined high charm AND curiosity - extra sharp
+    if charm >= 7 and curiosity >= 7:
+        wit_hints.append(
+            "Your quick mind and social grace combine into particularly sharp wit"
+        )
+
+    if not wit_hints:
+        return None
+
+    return "; ".join(wit_hints)
+
+
 def get_shared_memory_hint(agent: Agent, target: Agent, world: World) -> str | None:
     """Generate a hint about shared memories between agent and target.
 
@@ -469,6 +527,9 @@ def build_dialogue_prompt(
     # Voice hints based on personality
     voice_hints = get_trait_voice_hints(agent)
 
+    # Wit hints for high charm/curiosity agents
+    wit_hints = get_wit_hints(agent)
+
     # Mood influence
     mood = agent.mood_dict
     happiness = mood.get("happiness", 5)
@@ -497,13 +558,20 @@ RUNNING JOKES (inside jokes you share with {target.name}):
 {running_joke_hints}
 """
 
+    # Build wit section for high charm/curiosity agents
+    wit_section = ""
+    if wit_hints:
+        wit_section = f"""
+YOUR WIT: {wit_hints}
+"""
+
     prompt = f"""{agent_context}
 
 SPEAKING TO: {target.name}
 {relationship_subtext}
 {shared_history_section}{running_jokes_section}
 YOUR VOICE: {voice_hints}
-{mood_influence}
+{wit_section}{mood_influence}
 
 SITUATION: {context_type}
 
