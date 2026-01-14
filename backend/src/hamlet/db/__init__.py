@@ -10,7 +10,9 @@ from hamlet.db.models import (
     Location,
     Memory,
     Poll,
+    RefreshToken,
     Relationship,
+    User,
     WorldState,
 )
 from hamlet.db.seed import reset_database, seed_database
@@ -30,6 +32,8 @@ __all__ = [
     "Poll",
     "WorldState",
     "LLMUsage",
+    "User",
+    "RefreshToken",
     "seed_database",
     "reset_database",
 ]

@@ -1,5 +1,7 @@
 """Application configuration."""
 
+import secrets
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -25,6 +27,12 @@ class Settings(BaseSettings):
 
     # CORS - comma-separated list of allowed origins
     cors_origins: str = ""
+
+    # JWT Authentication
+    jwt_secret_key: str = secrets.token_urlsafe(32)  # Generate if not provided
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 30
+    refresh_token_expire_days: int = 7
 
 
 settings = Settings()
