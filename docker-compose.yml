@@ -6,7 +6,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=sqlite:///./hamlet.db
+      - DATABASE_URL=sqlite:////app/data/hamlet.db
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
     volumes:
       - hamlet_data:/app/data

@@ -23,6 +23,9 @@ RUN uv sync --frozen --no-dev
 # Copy application code
 COPY src/ ./src/
 
+# Create data directory for SQLite database
+RUN mkdir -p /app/data
+
 # Set Python path
 ENV PYTHONPATH=/app/src
 
