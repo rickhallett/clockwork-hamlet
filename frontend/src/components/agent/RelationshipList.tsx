@@ -24,7 +24,7 @@ function getScoreLabel(score: number): string {
 }
 
 export function RelationshipList({ relationships }: RelationshipListProps) {
-  if (relationships.length === 0) {
+  if (!relationships || relationships.length === 0) {
     return (
       <p className="text-fg-dim text-sm text-center py-4">
         No relationships yet

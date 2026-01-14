@@ -34,7 +34,7 @@ function getStatusIcon(status: string): string {
 }
 
 export function GoalList({ goals }: GoalListProps) {
-  if (goals.length === 0) {
+  if (!goals || goals.length === 0) {
     return (
       <p className="text-fg-dim text-sm text-center py-4">
         No active goals

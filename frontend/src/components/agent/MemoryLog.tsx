@@ -25,7 +25,7 @@ function getSignificanceIndicator(significance: number): string {
 export function MemoryLog({ memories }: MemoryLogProps) {
   return (
     <Terminal title="memories.log" className="max-h-[300px] overflow-y-auto">
-      {memories.length === 0 ? (
+      {!memories || memories.length === 0 ? (
         <p className="text-fg-dim text-sm">No memories recorded</p>
       ) : (
         <div className="space-y-3">
