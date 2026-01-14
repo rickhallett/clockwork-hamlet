@@ -15,6 +15,7 @@ def client():
     return TestClient(app)
 
 
+@pytest.mark.unit
 class TestHealthEndpoint:
     """Test health check endpoint."""
 
@@ -25,6 +26,7 @@ class TestHealthEndpoint:
         assert response.json() == {"status": "ok"}
 
 
+@pytest.mark.integration
 class TestWorldEndpoint:
     """Test world state endpoint."""
 
@@ -40,6 +42,7 @@ class TestWorldEndpoint:
         assert "weather" in data
 
 
+@pytest.mark.integration
 class TestAgentsEndpoints:
     """Test agent endpoints."""
 
@@ -78,6 +81,7 @@ class TestAgentsEndpoints:
         assert "context" in data
 
 
+@pytest.mark.integration
 class TestLocationsEndpoints:
     """Test location endpoints."""
 
@@ -104,6 +108,7 @@ class TestLocationsEndpoints:
         assert response.status_code == 404
 
 
+@pytest.mark.integration
 class TestEventsEndpoints:
     """Test event endpoints."""
 
@@ -127,6 +132,7 @@ class TestEventsEndpoints:
         assert isinstance(response.json(), list)
 
 
+@pytest.mark.integration
 class TestRelationshipsEndpoints:
     """Test relationship endpoints."""
 
@@ -148,6 +154,7 @@ class TestRelationshipsEndpoints:
         assert isinstance(relationships, list)
 
 
+@pytest.mark.integration
 class TestPollsEndpoints:
     """Test poll endpoints."""
 
@@ -169,6 +176,7 @@ class TestPollsEndpoints:
         assert response.status_code == 404
 
 
+@pytest.mark.integration
 class TestDigestEndpoints:
     """Test digest endpoints."""
 

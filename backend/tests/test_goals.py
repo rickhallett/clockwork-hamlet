@@ -16,32 +16,12 @@ from hamlet.goals import (
 )
 from hamlet.goals.manager import resolve_conflicts
 from hamlet.goals.types import get_category
-from hamlet.simulation.world import World
 
 
-@pytest.fixture
-def world():
-    """Create a test world with seeded database."""
-    w = World()
-    yield w
-    w.close()
+# Note: The 'world' and 'agent' fixtures are provided by conftest.py
 
 
-@pytest.fixture
-def agent(world) -> Agent:
-    """Get a test agent with default state."""
-    agent = world.get_agent("agnes")
-    # Reset to neutral state
-    agent.hunger = 0
-    agent.energy = 10
-    agent.social = 5
-    agent.traits = (
-        '{"curiosity": 5, "empathy": 5, "ambition": 5, "charm": 5, "courage": 5, "perception": 5}'
-    )
-    world.commit()
-    return agent
-
-
+@pytest.mark.unit
 class TestGoalTypes:
     """Test goal type definitions."""
 
@@ -74,6 +54,7 @@ class TestGoalTypes:
         assert get_category(GoalType.CONFRONT) == GoalCategory.REACTIVE
 
 
+@pytest.mark.integration
 class TestGoalGeneration:
     """Test goal generation from agent state."""
 
@@ -158,6 +139,7 @@ class TestGoalGeneration:
         assert len(goal_types & curiosity_goals) > 0
 
 
+@pytest.mark.integration
 class TestReactiveGoals:
     """Test reactive goal generation."""
 
@@ -189,6 +171,7 @@ class TestReactiveGoals:
         assert goal.priority >= 6
 
 
+@pytest.mark.integration
 class TestGoalPrioritization:
     """Test goal prioritization logic."""
 
@@ -220,6 +203,7 @@ class TestGoalPrioritization:
         assert sorted_goals[0].type == GoalType.EAT.value
 
 
+@pytest.mark.integration
 class TestGoalCompletion:
     """Test goal completion detection."""
 
@@ -264,6 +248,7 @@ class TestGoalCompletion:
         assert status == "completed"
 
 
+@pytest.mark.integration
 class TestConflictResolution:
     """Test goal conflict resolution."""
 

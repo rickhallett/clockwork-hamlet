@@ -16,6 +16,7 @@ def client():
     return TestClient(app)
 
 
+@pytest.mark.unit
 class TestStreamHistoryEndpoint:
     """Test stream history endpoint."""
 
@@ -45,6 +46,7 @@ class TestStreamHistoryEndpoint:
         assert response.status_code == 422
 
 
+@pytest.mark.integration
 class TestEventBusIntegration:
     """Test event bus integration with SSE."""
 
@@ -98,6 +100,7 @@ class TestEventBusIntegration:
         assert len(history) >= initial_count + 5
 
 
+@pytest.mark.unit
 class TestSSEFormat:
     """Test SSE response format."""
 
@@ -143,6 +146,7 @@ class TestSSEFormat:
         assert "Test" in json_str
 
 
+@pytest.mark.unit
 class TestStreamEndpoint:
     """Test SSE streaming endpoint configuration."""
 

@@ -18,29 +18,12 @@ from hamlet.memory import (
 )
 from hamlet.memory.context import get_memory_summary, get_relevant_memories
 from hamlet.memory.significance import decay_significance
-from hamlet.simulation.world import World
 
 
-@pytest.fixture
-def world():
-    """Create a test world with seeded database."""
-    w = World()
-    yield w
-    w.close()
+# Note: The 'world', 'agent', and 'db' fixtures are provided by conftest.py
 
 
-@pytest.fixture
-def agent(world) -> Agent:
-    """Get a test agent."""
-    return world.get_agent("agnes")
-
-
-@pytest.fixture
-def db(world):
-    """Get database session."""
-    return world.db
-
-
+@pytest.mark.unit
 class TestMemoryTypes:
     """Test memory type definitions."""
 
@@ -51,6 +34,7 @@ class TestMemoryTypes:
         assert MemoryType.LONGTERM.value == "longterm"
 
 
+@pytest.mark.unit
 class TestSignificance:
     """Test significance calculation."""
 
@@ -92,6 +76,7 @@ class TestSignificance:
         assert decay_significance(2, hours_passed=1000) >= 1
 
 
+@pytest.mark.integration
 class TestMemoryManager:
     """Test memory CRUD operations."""
 
@@ -149,6 +134,7 @@ class TestMemoryManager:
         assert len(remaining) == 0
 
 
+@pytest.mark.integration
 class TestCompression:
     """Test memory compression."""
 
@@ -216,6 +202,7 @@ class TestCompression:
         assert len(recent) >= 1
 
 
+@pytest.mark.integration
 class TestContext:
     """Test memory context building."""
 
@@ -276,6 +263,7 @@ class TestContext:
         assert any("Bob" in c for c in contents)
 
 
+@pytest.mark.integration
 class TestMemoryWorkflow:
     """Test complete memory workflow."""
 
