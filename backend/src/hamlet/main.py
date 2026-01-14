@@ -12,6 +12,7 @@ from hamlet.api import (
     agents_router,
     digest_router,
     events_router,
+    goals_router,
     locations_router,
     polls_router,
     relationships_router,
@@ -86,6 +87,7 @@ app.include_router(agents_router)
 app.include_router(locations_router)
 app.include_router(events_router)
 app.include_router(relationships_router)
+app.include_router(goals_router)
 app.include_router(polls_router)
 app.include_router(digest_router)
 app.include_router(stream_router)
