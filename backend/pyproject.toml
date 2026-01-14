@@ -63,3 +63,20 @@ known-first-party = ["hamlet"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning:pydantic.*:",
+]
+markers = [
+    "unit: Unit tests (fast, isolated)",
+    "integration: Integration tests (slower, require DB)",
+    "slow: Slow tests (>1s)",
+]
+
+[tool.coverage.run]
+source = ["hamlet"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 70
+show_missing = true
