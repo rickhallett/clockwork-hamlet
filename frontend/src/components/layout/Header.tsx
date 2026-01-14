@@ -42,6 +42,7 @@ export function Header() {
           {/* Navigation */}
           <nav className="flex items-center gap-1">
             <NavLink to="/">Home</NavLink>
+            <NavLink to="/about">About</NavLink>
             <NavLink to="/feed">Live Feed</NavLink>
             <NavLink to="/agents">Agents</NavLink>
             <NavLink to="/relationships">Relationships</NavLink>

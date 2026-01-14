@@ -1,4 +1,5 @@
 export { Home } from './Home'
+export { About } from './About'
 export { AgentList, AgentProfile } from './Agents'
 export { Relationships } from './Relationships'
 export { LiveFeed } from './LiveFeed'

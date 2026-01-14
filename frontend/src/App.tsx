@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { Layout } from './components/layout'
-import { Home, AgentList, AgentProfile, Relationships, LiveFeed, Digest } from './pages'
+import { Home, About, AgentList, AgentProfile, Relationships, LiveFeed, Digest } from './pages'
 
 function App() {
   return (
@@ -8,6 +8,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<Home />} />
+          <Route path="about" element={<About />} />
           <Route path="feed" element={<LiveFeed />} />
           <Route path="agents" element={<AgentList />} />
           <Route path="agents/:agentId" element={<AgentProfile />} />
