@@ -4,6 +4,7 @@ import { EventStream, FilterBar } from '../components/feed'
 
 export function LiveFeed() {
   const [activeTypes, setActiveTypes] = useState<string[]>([])
+  const [groupByTime, setGroupByTime] = useState(false)
 
   const filters = useMemo(
     () => ({
@@ -23,6 +24,10 @@ export function LiveFeed() {
 
   const handleClearFilters = useCallback(() => {
     setActiveTypes([])
+  }, [])
+
+  const handleToggleGrouping = useCallback(() => {
+    setGroupByTime((prev) => !prev)
   }, [])
 
   return (
@@ -61,6 +66,8 @@ export function LiveFeed() {
         activeTypes={activeTypes}
         onToggleType={handleToggleType}
         onClear={handleClearFilters}
+        groupByTime={groupByTime}
+        onToggleGrouping={handleToggleGrouping}
       />
 
       <EventStream
@@ -68,6 +75,7 @@ export function LiveFeed() {
         isPaused={isPaused}
         onPause={pause}
         onResume={resume}
+        groupByTime={groupByTime}
         className="min-h-[500px]"
       />
     </div>
