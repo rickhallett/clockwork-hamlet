@@ -341,19 +341,143 @@ branch: feat/life/emergent-narratives
 
 ## Agentic Workflow Framework
 
+### Git Worktree Architecture
+
+**IMPORTANT:** Agents MUST use git worktrees for parallel development, NOT branch switching.
+
+```
+~/worktrees/
+├── clockwork-hamlet/              # Main repository
+├── .coordination/
+│   ├── agents.db                  # SQLite coordination database
+│   ├── logs/                      # Agent logs
+│   └── setup-worktree.sh          # Setup script (copied)
+├── track-a-feed/                  # Worktree for Track A
+│   ├── .coordination.env          # Track config (auto-generated)
+│   ├── backend/
+│   └── frontend/
+├── track-b-poll/                  # Worktree for Track B
+├── track-c-life/                  # Worktree for Track C
+└── ...
+```
+
+**Why Worktrees:**
+- Each agent works in isolated directory - no branch switching conflicts
+- Untracked files (.env, node_modules) don't interfere between agents
+- All agents can run tests simultaneously
+- No "detached HEAD" disasters from concurrent operations
+
+### Worktree Setup Script
+
+Use `scripts/setup-worktree.sh` to create agent worktrees:
+
+```bash
+# From the main repository:
+./scripts/setup-worktree.sh <worktree-name> <branch-name> [base-branch]
+
+# Examples:
+./scripts/setup-worktree.sh track-a-feed feat/feed/export-csv master
+./scripts/setup-worktree.sh track-b-poll feat/poll/live-updates master
+./scripts/setup-worktree.sh track-c-life feat/life/dramatic-events master
+```
+
+The script automatically:
+1. Creates the git worktree with new branch
+2. Copies `.env*` files from main repo
+3. Copies `.claude/`, `.vscode/`, `.idea/` folders
+4. Copies `backend/.env` and `frontend/.env*`
+5. Installs backend dependencies (`uv sync`)
+6. Installs frontend dependencies (`npm install`)
+7. Initializes the coordination database entry
+8. Creates `.coordination.env` in the worktree
+
+### Coordination Database
+
+Agents coordinate via SQLite database at `~/worktrees/.coordination/agents.db`
+
+**Why SQLite:**
+- No server required
+- WAL mode handles concurrent reads excellently
+- Writes are serialized but fast (microseconds)
+- Prevents file I/O conflicts from ACTIVE_WORK.md
+
+**Database Schema:**
+```sql
+-- Track/agent registration
+agents (track, worktree_path, branch, ticket_id, status, current_task, agent_pid, ...)
+
+-- Inter-agent messaging
+messages (from_track, to_track, message_type, content, acknowledged, ...)
+
+-- File locking for shared files
+file_locks (file_path, locked_by, reason, ...)
+```
+
+**Python API (`scripts/agent_coordination.py`):**
+```python
+from agent_coordination import AgentCoordinator
+
+coord = AgentCoordinator()  # Auto-loads from .coordination.env
+
+# Claim track and start work
+coord.claim_track(ticket_id="FEED-8", task_description="Export to CSV")
+coord.update_status("working")
+
+# Coordinate with other agents
+coord.send_message("track-b", "warning", "I'm modifying events.py")
+coord.broadcast("info", "Pushing changes to origin")
+messages = coord.get_messages()
+
+# Lock shared files before editing
+if coord.lock_file("backend/src/hamlet/api/events.py", "Adding export endpoint"):
+    # ... make changes ...
+    coord.unlock_file("backend/src/hamlet/api/events.py")
+
+# Complete work
+coord.complete_track()
+```
+
+**CLI Interface:**
+```bash
+# Check all agents status
+python scripts/agent_coordination.py status
+
+# Claim track for work
+python scripts/agent_coordination.py claim FEED-8 --task "Export to CSV"
+
+# Send message to another agent
+python scripts/agent_coordination.py msg --to track-b --type warning "Modifying shared file"
+
+# Broadcast to all agents
+python scripts/agent_coordination.py msg --type info "Pushing to origin"
+
+# Check inbox
+python scripts/agent_coordination.py inbox
+
+# Show file locks
+python scripts/agent_coordination.py locks
+```
+
+---
+
 ### Standard Agent Types
 
 #### 1. Feature Development Agent
 **Trigger:** Ticket assigned with clear specification
 **Workflow:**
 ```
-1. Create feature branch from master
-2. Read ticket specification thoroughly
-3. Explore relevant codebase areas
-4. Implement feature with atomic commits
-5. Write/update tests
-6. Update ticket status throughout
-7. Create PR when complete
+1. Human creates worktree: ./scripts/setup-worktree.sh track-X feat/epic/feature
+2. Agent starts in worktree directory
+3. Agent claims track: coord.claim_track(ticket_id="EPIC-N")
+4. Read ticket specification thoroughly
+5. Explore relevant codebase areas
+6. Lock shared files before modifying: coord.lock_file("path")
+7. Implement feature with atomic commits
+8. Write/update tests
+9. Unlock files: coord.unlock_file("path")
+10. Update status throughout: coord.update_status("working", "Adding tests")
+11. Create PR when complete
+12. Release track: coord.complete_track()
 ```
 
 **Success Criteria:**
@@ -361,53 +485,32 @@ branch: feat/life/emergent-narratives
 - No linting errors
 - Ticket status is "review"
 - PR description matches work done
+- All file locks released
 
 #### 2. Test Coverage Agent
 **Trigger:** New code merged or coverage gap identified
 **Workflow:**
 ```
-1. Analyze target code
-2. Identify untested paths
-3. Generate test cases
-4. Run tests to verify
-5. Report coverage metrics
+1. Claim track in coordination DB
+2. Analyze target code
+3. Identify untested paths
+4. Generate test cases
+5. Run tests to verify
+6. Report coverage metrics
+7. Release track
 ```
-
-**Success Criteria:**
-- Coverage increased
-- All new tests pass
-- No flaky tests introduced
 
 #### 3. Integration Verification Agent
 **Trigger:** Before merge to master
 **Workflow:**
 ```
-1. Checkout branch
-2. Run full test suite
-3. Check for regressions
-4. Validate build succeeds
-5. Report status
+1. Work in dedicated worktree
+2. Pull latest master
+3. Run full test suite
+4. Check for regressions
+5. Validate build succeeds
+6. Report status to coordination DB
 ```
-
-**Success Criteria:**
-- All tests pass
-- Build succeeds
-- No new warnings
-
-#### 4. Ticket Sync Agent
-**Trigger:** End of work session or commit
-**Workflow:**
-```
-1. Parse recent commits
-2. Extract ticket references
-3. Update ticket statuses
-4. Link commits to tickets
-5. Report discrepancies
-```
-
-**Success Criteria:**
-- All referenced tickets updated
-- No orphaned work
 
 ---
 
@@ -415,55 +518,77 @@ branch: feat/life/emergent-narratives
 
 Create these in `.claude/commands/`:
 
-#### `/feature-start <ticket-id>`
+#### `/worktree-start <track-name> <ticket-id>`
 ```markdown
-Start work on a feature ticket:
-1. Read ticket: `ticket show <ticket-id>`
-2. Create branch: `git checkout -b feat/<epic>/<short-name>`
-3. Update ticket: `ticket start <ticket-id>`
-4. Begin implementation based on ticket spec
+Start work in a worktree (run from worktree directory):
+1. Verify .coordination.env exists
+2. Claim track: `python scripts/agent_coordination.py claim <ticket-id>`
+3. Check for messages: `python scripts/agent_coordination.py inbox`
+4. Read ticket specification
+5. Begin implementation
 ```
 
-#### `/feature-complete <ticket-id>`
+#### `/worktree-complete <ticket-id>`
 ```markdown
-Complete feature work:
-1. Run tests: `uv run pytest tests/ -v`
+Complete work in worktree:
+1. Run tests: `cd backend && uv run pytest tests/ -v`
 2. If tests pass:
+   - Release all file locks
    - Stage and commit with ticket reference
-   - Update ticket: `ticket review <ticket-id>`
-   - Report completion status
+   - Push branch to origin
+   - Create PR via `gh pr create`
+   - Mark track complete: `python scripts/agent_coordination.py release`
+   - Broadcast completion: `python scripts/agent_coordination.py msg --type done "PR created"`
 3. If tests fail:
    - Report failures
-   - Keep ticket in_progress
+   - Keep track claimed
 ```
 
-#### `/parallel-launch <ticket-ids...>`
+#### `/coord-status`
 ```markdown
-Launch parallel development agents:
-1. For each ticket-id:
-   - Spawn Task agent with feature-dev prompt
-   - Agent creates own branch
-   - Agent works independently
-2. Monitor all agents for completion
-3. Report when all complete
+Check coordination status:
+1. Show all agents: `python scripts/agent_coordination.py status`
+2. Show my messages: `python scripts/agent_coordination.py inbox`
+3. Show file locks: `python scripts/agent_coordination.py locks`
 ```
 
-#### `/verify-branch`
+#### `/lock-file <path> <reason>`
 ```markdown
-Verify current branch is merge-ready:
-1. Run full test suite
-2. Check commit messages follow convention
-3. Verify ticket status matches work
-4. Report any issues
+Lock a file before editing:
+1. Check if already locked: `python scripts/agent_coordination.py locks`
+2. If locked by another, message them or wait
+3. Lock file via coordination API
+4. Proceed with edit
+5. ALWAYS unlock when done
 ```
 
-#### `/sync-tickets`
-```markdown
-Synchronize ticket status with git state:
-1. List recent commits
-2. Extract ticket references from messages
-3. Update ticket statuses based on branch state
-4. Report any discrepancies
+---
+
+### Parallel Launch Protocol
+
+To launch N parallel agents:
+
+```bash
+# 1. Create worktrees for each track (human does this once)
+./scripts/setup-worktree.sh track-a feat/feed/export master
+./scripts/setup-worktree.sh track-b feat/poll/live master
+./scripts/setup-worktree.sh track-c feat/life/drama master
+
+# 2. Launch Claude Code in separate terminals/tmux panes
+# Terminal 1:
+cd ~/worktrees/track-a && claude
+# Prompt: "Work on FEED-8 (export to CSV). Use /worktree-start track-a FEED-8"
+
+# Terminal 2:
+cd ~/worktrees/track-b && claude
+# Prompt: "Work on POLL-12 (SSE updates). Use /worktree-start track-b POLL-12"
+
+# Terminal 3:
+cd ~/worktrees/track-c && claude
+# Prompt: "Work on LIFE-24 (conflict escalation). Use /worktree-start track-c LIFE-24"
+
+# 3. Monitor progress
+watch -n5 'python ~/worktrees/clockwork-hamlet/scripts/agent_coordination.py status'
 ```
 
 ---
@@ -472,9 +597,9 @@ Synchronize ticket status with git state:
 
 #### Pattern 1: Feature Development Loop
 ```bash
-/ralph-wiggum:ralph-loop "Implement FEED-2: significance indicators" \
+/ralph-wiggum:ralph-loop "Implement FEED-8: CSV export. Claim track first, lock files before editing, release when done." \
   --max-iterations 10 \
-  --completion-promise "tests pass and ticket marked review"
+  --completion-promise "tests pass and PR created"
 ```
 
 #### Pattern 2: Test Coverage Loop
@@ -484,38 +609,40 @@ Synchronize ticket status with git state:
   --completion-promise "coverage report shows >= 90%"
 ```
 
-#### Pattern 3: Bug Fix Loop
-```bash
-/ralph-wiggum:ralph-loop "Fix failing test test_agent_decision" \
-  --max-iterations 3 \
-  --completion-promise "pytest tests/test_agent.py passes"
-```
-
 ---
 
 ### Orchestration Scripts
 
-#### `scripts/parallel-features.py`
-```python
-"""Launch parallel Claude Code instances for independent features."""
-# Spawns separate tmux sessions or processes
-# Each instance works on assigned ticket
-# Monitors for completion
-# Reports aggregated status
-```
+#### `scripts/setup-worktree.sh`
+Creates a fully configured worktree with:
+- Git worktree on new branch
+- Copied .env files (root, backend, frontend)
+- Copied dot-folders (.claude, .vscode, .idea)
+- Installed dependencies
+- Coordination DB entry
+- Local .coordination.env config
 
-#### `scripts/verify-all-branches.sh`
+#### `scripts/agent_coordination.py`
+Python module and CLI for:
+- Track claiming/releasing
+- Status updates
+- Inter-agent messaging
+- File locking
+- Coordination queries
+
+#### `scripts/cleanup-worktrees.sh` (TODO)
 ```bash
 #!/bin/bash
-# Iterate through all feature branches
-# Run test suite on each
-# Report pass/fail matrix
+# Remove completed worktrees
+# Archive coordination logs
+# Prune merged branches
 ```
 
 #### `scripts/nightly-integration.sh`
 ```bash
 #!/bin/bash
-# Merge all ready branches to integration
+# Check coordination DB for completed tracks
+# Merge all ready branches to master
 # Run full test suite
 # Generate coverage report
 # Notify on failures
