@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { Layout } from './components/layout'
-import { Home, About, AgentList, AgentProfile, Relationships, LiveFeed, Digest } from './pages'
+import { Home, About, AgentList, AgentProfile, Relationships, LiveFeed, Digest, Map } from './pages'
 
 function App() {
   return (
@@ -14,6 +14,7 @@ function App() {
           <Route path="agents/:agentId" element={<AgentProfile />} />
           <Route path="relationships" element={<Relationships />} />
           <Route path="digest" element={<Digest />} />
+          <Route path="map" element={<Map />} />
         </Route>
       </Routes>
     </BrowserRouter>
