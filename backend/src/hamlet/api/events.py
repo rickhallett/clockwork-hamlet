@@ -1,12 +1,24 @@
 """Event API routes."""
 
+import csv
+import io
+from enum import Enum
+
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from hamlet.api.deps import get_db
 from hamlet.db import Event
 from hamlet.schemas.event import EventPage, EventResponse
+
+
+class ExportFormat(str, Enum):
+    """Supported export formats."""
+
+    JSON = "json"
+    CSV = "csv"
 
 router = APIRouter(prefix="/api/events", tags=["events"])
 
@@ -141,6 +153,67 @@ async def get_highlights(
     return [_event_to_response(e) for e in events]
 
 
+@router.get("/export/{format}")
+async def export_events(
+    format: ExportFormat,
+    event_type: str | None = Query(None, description="Filter by event type"),
+    location_id: str | None = Query(None, description="Filter by location"),
+    actor_id: str | None = Query(None, description="Filter by actor (agent ID)"),
+    min_significance: int | None = Query(
+        None, ge=1, le=3, description="Minimum significance level"
+    ),
+    timestamp_from: int | None = Query(
+        None, description="Filter events from this Unix timestamp (inclusive)"
+    ),
+    timestamp_to: int | None = Query(
+        None, description="Filter events up to this Unix timestamp (inclusive)"
+    ),
+    limit: int | None = Query(
+        None, ge=1, le=10000, description="Max events to export (default: all)"
+    ),
+    db: Session = Depends(get_db),
+):
+    """Export events to JSON or CSV format.
+
+    Exports events matching the specified filters. Results are returned as a
+    downloadable file. For large exports, consider using filters to limit the
+    result set.
+
+    **Success criteria from FEED-8:**
+    - Export 10k events in <5 seconds
+    - History queries use indexed columns
+    """
+    query = db.query(Event)
+
+    # Apply filters
+    if event_type:
+        query = query.filter(Event.type == event_type)
+    if location_id:
+        query = query.filter(Event.location_id == location_id)
+    if actor_id:
+        query = query.filter(Event.actors.like(f'%"{actor_id}"%'))
+    if min_significance:
+        query = query.filter(Event.significance >= min_significance)
+    if timestamp_from:
+        query = query.filter(Event.timestamp >= timestamp_from)
+    if timestamp_to:
+        query = query.filter(Event.timestamp <= timestamp_to)
+
+    # Order by timestamp descending (newest first)
+    query = query.order_by(Event.timestamp.desc())
+
+    # Apply limit if specified
+    if limit:
+        query = query.limit(limit)
+
+    events = query.all()
+
+    if format == ExportFormat.JSON:
+        return _export_json(events)
+    else:
+        return _export_csv(events)
+
+
 @router.get("/{event_id}", response_model=EventResponse)
 async def get_event(event_id: int, db: Session = Depends(get_db)):
     """Get a specific event by ID."""
@@ -150,6 +223,86 @@ async def get_event(event_id: int, db: Session = Depends(get_db)):
     if not event:
         raise HTTPException(status_code=404, detail=f"Event {event_id} not found")
     return _event_to_response(event)
+
+
+def _export_json(events: list[Event]) -> StreamingResponse:
+    """Export events as JSON."""
+    import json
+
+    data = [
+        {
+            "id": e.id,
+            "timestamp": e.timestamp,
+            "type": e.type,
+            "actors": e.actors_list,
+            "location_id": e.location_id,
+            "summary": e.summary,
+            "detail": e.detail,
+            "significance": e.significance,
+        }
+        for e in events
+    ]
+
+    # Use streaming response for potentially large files
+    content = json.dumps(data, indent=2)
+
+    return StreamingResponse(
+        iter([content]),
+        media_type="application/json",
+        headers={
+            "Content-Disposition": "attachment; filename=events.json",
+            "Content-Length": str(len(content)),
+        },
+    )
+
+
+def _export_csv(events: list[Event]) -> StreamingResponse:
+    """Export events as CSV."""
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    # Write header
+    writer.writerow(
+        [
+            "id",
+            "timestamp",
+            "type",
+            "actors",
+            "location_id",
+            "summary",
+            "detail",
+            "significance",
+        ]
+    )
+
+    # Write data rows
+    for e in events:
+        # Convert actors list to comma-separated string for CSV
+        actors_str = ",".join(e.actors_list) if e.actors_list else ""
+        writer.writerow(
+            [
+                e.id,
+                e.timestamp,
+                e.type,
+                actors_str,
+                e.location_id or "",
+                e.summary,
+                e.detail or "",
+                e.significance,
+            ]
+        )
+
+    content = output.getvalue()
+    output.close()
+
+    return StreamingResponse(
+        iter([content]),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": "attachment; filename=events.csv",
+            "Content-Length": str(len(content)),
+        },
+    )
 
 
 def _event_to_response(event: Event) -> EventResponse:
