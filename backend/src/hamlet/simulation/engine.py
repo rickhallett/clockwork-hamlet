@@ -8,6 +8,8 @@ import time
 from hamlet.config import settings
 from hamlet.db import Agent, Event
 from hamlet.simulation.events import EventType, event_bus
+from hamlet.simulation.greetings import generate_arrival_comment
+from hamlet.simulation.idle import IdleBehavior, get_idle_behavior
 from hamlet.simulation.world import AgentPerception, World
 
 logger = logging.getLogger(__name__)
@@ -172,6 +174,9 @@ class SimulationEngine:
 
         if action:
             await self._execute_action(agent, action)
+        else:
+            # No action chosen - do an idle behavior instead
+            await self._do_idle_behavior(agent, perception)
 
     def _choose_random_action(self, agent: Agent, perception: AgentPerception) -> dict | None:
         """Choose a random action for the agent based on needs and opportunities."""
@@ -284,6 +289,24 @@ class SimulationEngine:
                 [agent.id],
                 destination_id,
             )
+
+            # Check for other agents and potentially generate a greeting
+            others = self.world.get_agents_at_location(destination_id)
+            others = [a for a in others if a.id != agent.id]
+
+            if others:
+                perception = self.world.get_agent_perception(agent)
+                comment = generate_arrival_comment(agent, others, perception)
+
+                if comment:
+                    logger.info(f"  {agent.name} greets: {comment}")
+
+                    await self.world.publish_event(
+                        EventType.DIALOGUE,
+                        comment,
+                        actors=[agent.id],
+                        location_id=destination_id,
+                    )
 
     async def _do_greet(self, agent: Agent, target_name: str) -> None:
         """Agent greets another agent."""
@@ -451,6 +474,32 @@ class SimulationEngine:
             [agent.id],
             agent.location_id,
             significance=2,
+        )
+
+    async def _do_idle_behavior(self, agent: Agent, perception: AgentPerception) -> None:
+        """Agent does an idle behavior - thoughts, observations, small actions."""
+        behavior = get_idle_behavior(agent, perception)
+
+        if behavior is None:
+            # Truly do nothing (rare)
+            logger.debug(f"  {agent.name} does nothing")
+            return
+
+        logger.debug(f"  {agent.name} idle: {behavior.content}")
+
+        # Map behavior type to event type
+        event_type = EventType.ACTION
+        if behavior.type == "thought":
+            event_type = EventType.SYSTEM  # Internal thoughts
+        elif behavior.type == "observation":
+            event_type = EventType.DISCOVERY
+
+        await self.world.publish_event(
+            event_type,
+            behavior.content,
+            actors=[agent.id],
+            location_id=agent.location_id,
+            significance=behavior.significance,
         )
 
     def _record_event(
