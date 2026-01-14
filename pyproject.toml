@@ -1,0 +1,27 @@
+[project]
+name = "ticket-manager"
+version = "0.1.0"
+description = "CLI ticket manager for development roadmaps"
+requires-python = ">=3.11"
+dependencies = [
+    "typer[all]>=0.9.0",
+    "sqlalchemy>=2.0",
+    "pydantic>=2.0",
+    "rich>=13.0",
+]
+
+[project.scripts]
+ticket = "ticket_manager.cli.main:app"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["ticket_manager"]
