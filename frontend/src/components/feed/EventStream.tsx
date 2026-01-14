@@ -1,4 +1,5 @@
 import { useRef, useEffect, useCallback, useMemo } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { Terminal } from '../common'
 import { EventCard } from './EventCard'
 import type { VillageEvent } from '../../hooks'
@@ -65,6 +66,9 @@ function TimeGroupHeader({ label, count }: { label: string; count: number }) {
   )
 }
 
+// Estimated height of each event card row (including gap)
+const ESTIMATED_ROW_HEIGHT = 72
+
 export function EventStream({
   events,
   isPaused,
@@ -80,6 +84,13 @@ export function EventStream({
     if (!groupByTime) return null
     return groupEventsByTime(events)
   }, [events, groupByTime])
+
+  const virtualizer = useVirtualizer({
+    count: events.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => ESTIMATED_ROW_HEIGHT,
+    overscan: 5,
+  })
 
   // Auto-scroll to top when new events arrive (if not paused)
   useEffect(() => {
@@ -119,11 +130,35 @@ export function EventStream({
     </div>
   )
 
-  const renderFlatEvents = () => (
-    <div className="space-y-1">
-      {events.map((event) => (
-        <EventCard key={event.id} event={event} />
-      ))}
+  const virtualItems = virtualizer.getVirtualItems()
+
+  const renderVirtualizedEvents = () => (
+    <div
+      style={{
+        height: `${virtualizer.getTotalSize()}px`,
+        width: '100%',
+        position: 'relative',
+      }}
+    >
+      {virtualItems.map((virtualItem) => {
+        const event = events[virtualItem.index]
+        return (
+          <div
+            key={event.id}
+            data-index={virtualItem.index}
+            ref={virtualizer.measureElement}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              transform: `translateY(${virtualItem.start}px)`,
+            }}
+          >
+            <EventCard event={event} />
+          </div>
+        )
+      })}
     </div>
   )
 
@@ -137,7 +172,7 @@ export function EventStream({
         className="max-h-[600px] overflow-y-auto scrollbar-thin scrollbar-thumb-bg-highlight scrollbar-track-transparent"
       >
         {isPaused && (
-          <div className="sticky top-0 bg-accent-yellow/10 border border-accent-yellow/30 rounded-lg px-3 py-2 mb-3 text-sm text-accent-yellow z-10">
+          <div className="sticky top-0 z-10 bg-accent-yellow/10 border border-accent-yellow/30 rounded-lg px-3 py-2 mb-3 text-sm text-accent-yellow">
             Stream paused - hover to browse
           </div>
         )}
@@ -149,7 +184,7 @@ export function EventStream({
         ) : groupByTime ? (
           renderGroupedEvents()
         ) : (
-          renderFlatEvents()
+          renderVirtualizedEvents()
         )}
 
         {events.length > 0 && (

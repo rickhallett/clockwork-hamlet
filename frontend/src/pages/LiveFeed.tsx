@@ -15,7 +15,7 @@ export function LiveFeed() {
   )
 
   const { events, isConnected, isPaused, error, pause, resume, clearEvents } =
-    useVillageStream({ filters, maxEvents: 100 })
+    useVillageStream({ filters, maxEvents: 1000 })
 
   // Filter events by search query (client-side)
   const filteredEvents = useMemo(() => {
