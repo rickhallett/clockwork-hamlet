@@ -221,6 +221,133 @@ Examples:
     return prompt
 
 
+def get_trait_voice_hints(agent: Agent) -> str:
+    """Generate speaking style hints based on personality traits."""
+    traits = agent.traits_dict
+    hints = []
+
+    # Discretion affects how freely they share
+    discretion = traits.get("discretion", 5)
+    if discretion <= 3:
+        hints.append("You tend to blurt things out and overshare")
+    elif discretion >= 8:
+        hints.append("You speak carefully, revealing little")
+
+    # Charm affects how they come across
+    charm = traits.get("charm", 5)
+    if charm >= 8:
+        hints.append("You're naturally charming and put people at ease")
+    elif charm <= 3:
+        hints.append("You're blunt and sometimes awkward socially")
+
+    # Energy affects verbosity
+    energy = traits.get("energy", 5)
+    if energy >= 8:
+        hints.append("You speak quickly and with enthusiasm")
+    elif energy <= 3:
+        hints.append("You speak slowly, with economy of words")
+
+    # Empathy affects attentiveness
+    empathy = traits.get("empathy", 5)
+    if empathy >= 8:
+        hints.append("You notice how others feel and respond to it")
+
+    # Curiosity affects questions
+    curiosity = traits.get("curiosity", 5)
+    if curiosity >= 8:
+        hints.append("You ask questions and want to know more")
+
+    return "; ".join(hints) if hints else "You speak in a straightforward manner"
+
+
+def get_shared_memory_hint(agent: Agent, target: Agent, world: World) -> str | None:
+    """Generate a hint about shared memories between agent and target.
+
+    Queries the agent's memories for ones mentioning the target,
+    prioritizing high-significance memories.
+
+    Args:
+        agent: The agent whose memories to query
+        target: The target agent to find shared memories with
+        world: The world containing the database
+
+    Returns:
+        A hint string if significant shared memories exist, None otherwise
+    """
+    db = world.db
+
+    # Query agent's memories, ordered by significance then recency
+    memories = (
+        db.query(Memory)
+        .filter(Memory.agent_id == agent.id)
+        .order_by(Memory.significance.desc(), Memory.timestamp.desc())
+        .limit(50)  # Check a reasonable number of memories
+        .all()
+    )
+
+    # Filter for memories mentioning the target's name
+    target_name = target.name
+    shared_memories = []
+    for memory in memories:
+        if target_name.lower() in memory.content.lower():
+            shared_memories.append(memory)
+            if len(shared_memories) >= 2:  # Limit to 2 shared memories
+                break
+
+    if not shared_memories:
+        return None
+
+    # Build hints from the shared memories
+    hints = []
+    for memory in shared_memories:
+        # Only include memories with significance >= 5 for hints
+        if memory.significance >= 5:
+            hints.append(f"You could reference: {memory.content}")
+
+    if not hints:
+        return None
+
+    return "\n".join(hints)
+
+
+def get_relationship_subtext(agent: Agent, target: Agent, rel: Relationship | None, world: World) -> str:
+    """Generate relationship-aware subtext hints."""
+    if not rel:
+        return f"You don't know {target.name} well yet."
+
+    subtext_parts = []
+
+    # Basic relationship level
+    if rel.score >= 7:
+        subtext_parts.append(f"You're very fond of {target.name}")
+    elif rel.score >= 4:
+        subtext_parts.append(f"You like {target.name}")
+    elif rel.score >= 0:
+        subtext_parts.append(f"You're neutral about {target.name}")
+    elif rel.score >= -4:
+        subtext_parts.append(f"You're wary of {target.name}")
+    else:
+        subtext_parts.append(f"You dislike {target.name}")
+
+    # Add history color if available
+    if rel.history:
+        import json
+        try:
+            history = json.loads(rel.history) if isinstance(rel.history, str) else rel.history
+            if history:
+                subtext_parts.append(f"History: {history[0]}")
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    # Check for romantic subtext in personality prompts
+    agent_prompt = (agent.personality_prompt or "").lower()
+    target_name_lower = target.name.lower().split()[0]  # First name
+    if f"crush on {target_name_lower}" in agent_prompt or f"love with {target_name_lower}" in agent_prompt or f"loves {target_name_lower}" in agent_prompt:
+        subtext_parts.append(f"SECRET: You have romantic feelings for {target.name} (this affects how you act around them - nervous, trying to impress, etc.)")
+
+    return ". ".join(subtext_parts)
+
+
 def build_dialogue_prompt(
     agent: Agent,
     target: Agent,
@@ -238,31 +365,46 @@ def build_dialogue_prompt(
         .first()
     )
 
-    relationship_desc = "stranger"
-    if rel:
-        if rel.score >= 7:
-            relationship_desc = "close friend (very fond of them)"
-        elif rel.score >= 4:
-            relationship_desc = "friend (like them)"
-        elif rel.score >= 0:
-            relationship_desc = "acquaintance (neutral)"
-        elif rel.score >= -4:
-            relationship_desc = "someone you're wary of"
-        else:
-            relationship_desc = "someone you dislike"
+    # Rich relationship context
+    relationship_subtext = get_relationship_subtext(agent, target, rel, world)
+
+    # Shared memory hints
+    shared_memory_hint = get_shared_memory_hint(agent, target, world)
+
+    # Voice hints based on personality
+    voice_hints = get_trait_voice_hints(agent)
+
+    # Mood influence
+    mood = agent.mood_dict
+    happiness = mood.get("happiness", 5)
+    energy_mood = mood.get("energy", 5)
+    mood_influence = ""
+    if happiness <= 3:
+        mood_influence = "You're in a bad mood - it shows in your tone."
+    elif happiness >= 8:
+        mood_influence = "You're in great spirits - more talkative and warm."
+    if energy_mood <= 3:
+        mood_influence += " You're tired - keep it brief."
+
+    # Build shared history section
+    shared_history_section = ""
+    if shared_memory_hint:
+        shared_history_section = f"""
+SHARED HISTORY (you may naturally reference past interactions):
+{shared_memory_hint}
+"""
 
     prompt = f"""{agent_context}
 
-You are about to speak to {target.name}, who is a {relationship_desc}.
+SPEAKING TO: {target.name}
+{relationship_subtext}
+{shared_history_section}
+YOUR VOICE: {voice_hints}
+{mood_influence}
 
-DIALOGUE CONTEXT: {context_type}
+SITUATION: {context_type}
 
-Generate a short, natural line of dialogue that:
-- Matches your personality
-- Reflects your relationship with {target.name}
-- Is appropriate for the context
-- Sounds natural and conversational
-- Is 1-2 sentences maximum
+Generate dialogue that sounds like a real villager, not a video game NPC. Be specific, be yourself, and don't be afraid to be funny, awkward, or indirect. If you have shared history with this person, you might occasionally reference past interactions naturally (e.g., "Remember when..." or "Like that time we...").
 
 Respond with ONLY the dialogue (no quotes, no name prefix):
 """
