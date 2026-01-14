@@ -1,5 +1,6 @@
 """Action execution logic."""
 
+import asyncio
 import json
 import logging
 import time
@@ -7,6 +8,8 @@ import time
 from hamlet.actions.types import Action, ActionResult, ActionType
 from hamlet.actions.validation import calculate_receptiveness, validate_action
 from hamlet.db import Agent, Event, Memory, Relationship
+from hamlet.simulation.events import EventType, SimulationEvent
+from hamlet.simulation.reactions import generate_witness_reaction
 from hamlet.simulation.world import World
 
 logger = logging.getLogger(__name__)
@@ -588,6 +591,25 @@ def process_witnesses(action: Action, result: ActionResult, actor: Agent, world:
     witnesses = world.get_agents_at_location(actor.location_id)
     witnesses = [w for w in witnesses if w.id != actor.id and w.id != action.target_id]
 
+    # Build list of actor names for reactions
+    actors = [actor.name]
+    if action.target_id:
+        target = world.get_agent(action.target_id)
+        if target:
+            actors.append(target.name)
+
+    # Determine significance based on action type
+    action_significance = {
+        ActionType.CONFRONT: 7,
+        ActionType.GOSSIP: 5,
+        ActionType.HELP: 4,
+        ActionType.GIVE: 4,
+        ActionType.TELL: 3,
+        ActionType.TALK: 2,
+        ActionType.GREET: 1,
+    }
+    significance = action_significance.get(action.type, 2)
+
     for witness in witnesses:
         # Create witness memory
         create_memory(
@@ -614,6 +636,57 @@ def process_witnesses(action: Action, result: ActionResult, actor: Agent, world:
         elif action.type == ActionType.GIVE:
             # Witnessing generosity
             update_relationship(world, witness.id, actor.id, 1, "saw generosity")
+
+        # Generate visible reaction for witness
+        reaction = generate_witness_reaction(
+            witness_agent=witness,
+            event_type=action.type.value,
+            actors=actors,
+            significance=significance,
+        )
+
+        if reaction:
+            # Publish the reaction event
+            _publish_reaction(world, witness, reaction, actor.location_id)
+
+
+def _publish_reaction(
+    world: World, witness: Agent, reaction: str, location_id: str | None
+) -> None:
+    """Publish a witness reaction event to the event bus.
+
+    This handles the sync-to-async bridge for publishing events from
+    synchronous code.
+    """
+    event = SimulationEvent(
+        type=EventType.ACTION,
+        summary=reaction,
+        timestamp=int(time.time()),
+        actors=[witness.id],
+        location_id=location_id,
+        significance=1,
+        data={},
+    )
+
+    # Get the world state for tick info if available
+    try:
+        state = world.get_world_state()
+        event.data = {"tick": state.current_tick, "day": state.current_day, "hour": state.current_hour}
+    except Exception:
+        pass
+
+    # Publish directly to the event bus (synchronous path)
+    # The event bus's publish method uses put_nowait which is sync
+    event_bus = world.event_bus
+    event_bus._history.append(event)
+    if len(event_bus._history) > event_bus._max_history:
+        event_bus._history = event_bus._history[-event_bus._max_history:]
+
+    for queue in event_bus._subscribers:
+        try:
+            queue.put_nowait(event)
+        except asyncio.QueueFull:
+            pass
 
 
 def update_relationship(
