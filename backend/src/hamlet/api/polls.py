@@ -1,12 +1,14 @@
 """Poll API routes."""
 
+import time
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from hamlet.api.deps import get_db
 from hamlet.db import Agent, Poll
-from hamlet.schemas.poll import PollResponse
+from hamlet.schemas.poll import MultiVoteRequest, PollCreate, PollResponse
 from hamlet.simulation.polls import (
     decide_vote,
     get_voting_summary,
@@ -45,7 +47,7 @@ async def get_poll(poll_id: int, db: Session = Depends(get_db)):
 
 @router.post("/vote")
 async def submit_vote(vote: VoteRequest, db: Session = Depends(get_db)):
-    """Submit a vote for a poll option."""
+    """Submit a vote for a poll option (single choice)."""
     poll = db.query(Poll).filter(Poll.id == vote.poll_id).first()
 
     if not poll:
@@ -75,6 +77,62 @@ async def submit_vote(vote: VoteRequest, db: Session = Depends(get_db)):
     }
 
 
+@router.post("/vote-multiple")
+async def submit_multiple_votes(vote: MultiVoteRequest, db: Session = Depends(get_db)):
+    """Submit votes for multiple poll options.
+
+    Only works for polls with allow_multiple=True.
+    """
+    poll = db.query(Poll).filter(Poll.id == vote.poll_id).first()
+
+    if not poll:
+        raise HTTPException(status_code=404, detail=f"Poll {vote.poll_id} not found")
+
+    if poll.status != "active":
+        raise HTTPException(status_code=400, detail="Poll is not active")
+
+    if not poll.allow_multiple:
+        raise HTTPException(
+            status_code=400,
+            detail="This poll does not allow multiple selections. Use /vote endpoint instead.",
+        )
+
+    if not vote.option_indices:
+        raise HTTPException(status_code=400, detail="Must select at least one option")
+
+    options = poll.options_list
+    # Validate all option indices
+    for idx in vote.option_indices:
+        if idx < 0 or idx >= len(options):
+            raise HTTPException(status_code=400, detail=f"Invalid option {idx}. Must be 0-{len(options) - 1}")
+
+    # Check for duplicates
+    if len(vote.option_indices) != len(set(vote.option_indices)):
+        raise HTTPException(status_code=400, detail="Duplicate options not allowed")
+
+    # Update vote counts for all selected options
+    votes = poll.votes_dict
+    updated = []
+    for idx in vote.option_indices:
+        option_key = str(idx)
+        votes[option_key] = votes.get(option_key, 0) + 1
+        updated.append({
+            "option": idx,
+            "option_text": options[idx],
+            "new_count": votes[option_key],
+        })
+    poll.votes_dict = votes
+
+    db.commit()
+
+    return {
+        "success": True,
+        "poll_id": poll.id,
+        "votes_cast": len(vote.option_indices),
+        "options": updated,
+    }
+
+
 @router.get("", response_model=list[PollResponse])
 async def list_polls(
     status: str | None = None,
@@ -89,6 +147,34 @@ async def list_polls(
         query = query.filter(Poll.category == category)
     polls = query.order_by(Poll.created_at.desc()).all()
     return [_poll_to_response(p) for p in polls]
+
+
+@router.post("", response_model=PollResponse, status_code=201)
+async def create_poll(poll_data: PollCreate, db: Session = Depends(get_db)):
+    """Create a new poll (admin endpoint)."""
+    if len(poll_data.options) < 2:
+        raise HTTPException(status_code=400, detail="Poll must have at least 2 options")
+
+    if len(poll_data.options) > 10:
+        raise HTTPException(status_code=400, detail="Poll cannot have more than 10 options")
+
+    poll = Poll(
+        question=poll_data.question,
+        created_at=int(time.time()),
+        closes_at=poll_data.closes_at,
+        allow_multiple=poll_data.allow_multiple,
+        category=poll_data.category,
+        status="active",
+    )
+    poll.options_list = poll_data.options
+    poll.votes_dict = {}
+    poll.tags_list = poll_data.tags
+
+    db.add(poll)
+    db.commit()
+    db.refresh(poll)
+
+    return _poll_to_response(poll)
 
 
 class AgentVoteRequest(BaseModel):
@@ -209,4 +295,5 @@ def _poll_to_response(poll: Poll) -> PollResponse:
         closes_at=poll.closes_at,
         category=poll.category,
         tags=poll.tags_list,
+        allow_multiple=poll.allow_multiple,
     )

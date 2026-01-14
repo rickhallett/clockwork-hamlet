@@ -242,6 +242,7 @@ class Poll(Base):
     closes_at = Column(Integer)  # Unix timestamp
     category = Column(String(50))  # Poll category for filtering
     tags = Column(Text, default="[]")  # JSON array of tag strings
+    allow_multiple = Column(Boolean, default=False)  # Allow selecting multiple options
 
     @property
     def options_list(self) -> list[str]:
