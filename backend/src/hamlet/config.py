@@ -23,5 +23,8 @@ class Settings(BaseSettings):
     day_start_hour: int = 6
     day_end_hour: int = 22
 
+    # CORS - comma-separated list of allowed origins
+    cors_origins: str = ""
+
 
 settings = Settings()

@@ -64,18 +64,30 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Build CORS origins list
+cors_origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:3003",
+    "http://127.0.0.1:3003",
+    # Production
+    "https://clockwork.oceanheart.ai",
+    # Vercel deployments
+    "https://clockwork-hamlet.vercel.app",
+    "https://clockwork-hamlet-rick-halletts-projects.vercel.app",
+]
+
+# Add any additional origins from environment variable
+if settings.cors_origins:
+    cors_origins.extend([o.strip() for o in settings.cors_origins.split(",") if o.strip()])
+
 # CORS middleware for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:3003",
-        "http://127.0.0.1:3003",
-        # Add production domains here
-    ],
+    allow_origins=cors_origins,
+    allow_origin_regex=r"https://clockwork-hamlet.*\.vercel\.app",  # Allow all Vercel preview deployments
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
