@@ -18,6 +18,7 @@ from hamlet.api import (
     locations_router,
     polls_router,
     relationships_router,
+    stats_router,
     stream_router,
     world_router,
 )
@@ -163,6 +164,7 @@ app.include_router(polls_router)
 app.include_router(digest_router)
 app.include_router(stream_router)
 app.include_router(llm_router)
+app.include_router(stats_router)
 
 
 @app.get("/")
