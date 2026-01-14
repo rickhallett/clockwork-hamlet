@@ -209,6 +209,10 @@ class TestPollsEndpoints:
         assert data["options"] == ["Go to market", "Visit the tavern", "Take a nap"]
         assert data["status"] == "active"
         assert data["allow_multiple"] is False
+        assert data["votes"] == {}
+        assert "id" in data
+        assert "created_at" in data
+        assert "opens_at" in data
 
     def test_create_multiple_choice_poll(self, client):
         """Can create a poll allowing multiple selections."""
@@ -292,6 +296,74 @@ class TestPollsEndpoints:
         )
         assert vote_resp.status_code == 400
         assert "Duplicate" in vote_resp.json()["detail"]
+
+    def test_create_poll_with_closes_at(self, client):
+        """Can create poll with closing time."""
+        import time
+
+        closes_at = int(time.time()) + 3600  # 1 hour from now
+        response = client.post(
+            "/api/polls",
+            json={
+                "question": "Best time for festival?",
+                "options": ["Morning", "Afternoon"],
+                "closes_at": closes_at,
+            },
+        )
+        assert response.status_code == 201
+        data = response.json()
+        assert data["closes_at"] == closes_at
+
+    def test_create_scheduled_poll(self, client):
+        """Can create a scheduled poll with future opens_at."""
+        import time
+
+        opens_at = int(time.time()) + 3600  # 1 hour from now
+        response = client.post(
+            "/api/polls",
+            json={
+                "question": "What should happen tomorrow?",
+                "options": ["Option A", "Option B"],
+                "opens_at": opens_at,
+            },
+        )
+        assert response.status_code == 201
+        data = response.json()
+        assert data["status"] == "scheduled"
+        assert data["opens_at"] == opens_at
+
+    def test_create_poll_too_few_options(self, client):
+        """Poll creation fails with fewer than 2 options."""
+        response = client.post(
+            "/api/polls",
+            json={
+                "question": "Only one choice?",
+                "options": ["Only option"],
+            },
+        )
+        assert response.status_code == 400
+        assert "at least 2 options" in response.json()["detail"]
+
+    def test_create_poll_too_many_options(self, client):
+        """Poll creation fails with more than 10 options."""
+        response = client.post(
+            "/api/polls",
+            json={
+                "question": "Too many choices?",
+                "options": [f"Option {i}" for i in range(11)],
+            },
+        )
+        assert response.status_code == 400
+        assert "more than 10 options" in response.json()["detail"]
+
+    def test_process_schedules_endpoint(self, client):
+        """Can manually trigger schedule processing."""
+        response = client.post("/api/polls/process-schedules")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert "polls_opened" in data
+        assert "polls_closed" in data
 
 
 @pytest.mark.integration

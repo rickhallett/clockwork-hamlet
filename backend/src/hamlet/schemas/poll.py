@@ -13,6 +13,7 @@ class PollBase(BaseModel):
 class PollCreate(PollBase):
     """Schema for creating a poll."""
 
+    opens_at: int | None = None
     closes_at: int | None = None
     category: str | None = None
     tags: list[str] = []
@@ -30,6 +31,7 @@ class PollResponse(BaseModel):
     votes: dict[str, int]
     status: str
     created_at: int
+    opens_at: int | None
     closes_at: int | None
     category: str | None
     tags: list[str]

@@ -237,9 +237,10 @@ class Poll(Base):
     question = Column(Text, nullable=False)
     options = Column(Text, nullable=False)  # JSON array of option strings
     votes = Column(Text, default="{}")  # JSON object: {option_index: vote_count}
-    status = Column(String(20), default="active")  # active, closed
+    status = Column(String(20), default="active")  # scheduled, active, closed
     created_at = Column(Integer, nullable=False)  # Unix timestamp
-    closes_at = Column(Integer)  # Unix timestamp
+    opens_at = Column(Integer)  # Unix timestamp - when poll becomes active
+    closes_at = Column(Integer)  # Unix timestamp - when poll closes
     category = Column(String(50))  # Poll category for filtering
     tags = Column(Text, default="[]")  # JSON array of tag strings
     allow_multiple = Column(Boolean, default=False)  # Allow selecting multiple options
