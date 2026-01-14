@@ -1,14 +1,14 @@
 # Frontend Dockerfile for Clockwork Hamlet
 # Stage 1: Build
-FROM node:20-alpine AS builder
+FROM oven/bun:alpine AS builder
 
 WORKDIR /app
 
 # Copy package files
-COPY package.json package-lock.json ./
+COPY package.json bun.lockb* package-lock.json* ./
 
 # Install dependencies
-RUN npm ci
+RUN bun install --frozen-lockfile
 
 # Copy source code
 COPY . .
@@ -16,7 +16,7 @@ COPY . .
 # Build for production
 ARG VITE_API_URL
 ENV VITE_API_URL=${VITE_API_URL}
-RUN npm run build
+RUN bun run build
 
 # Stage 2: Serve
 FROM nginx:alpine
