@@ -194,6 +194,177 @@ class TestPollsEndpoints:
         assert response.status_code == 200
         assert isinstance(response.json(), list)
 
+    def test_create_poll(self, client):
+        """Can create a new poll."""
+        response = client.post(
+            "/api/polls",
+            json={
+                "question": "What should Agnes do next?",
+                "options": ["Go to market", "Visit the tavern", "Take a nap"],
+            },
+        )
+        assert response.status_code == 201
+        data = response.json()
+        assert data["question"] == "What should Agnes do next?"
+        assert data["options"] == ["Go to market", "Visit the tavern", "Take a nap"]
+        assert data["status"] == "active"
+        assert data["allow_multiple"] is False
+        assert data["votes"] == {}
+        assert "id" in data
+        assert "created_at" in data
+        assert "opens_at" in data
+
+    def test_create_multiple_choice_poll(self, client):
+        """Can create a poll allowing multiple selections."""
+        response = client.post(
+            "/api/polls",
+            json={
+                "question": "Which activities interest you?",
+                "options": ["Reading", "Walking", "Cooking", "Gardening"],
+                "allow_multiple": True,
+            },
+        )
+        assert response.status_code == 201
+        data = response.json()
+        assert data["allow_multiple"] is True
+
+    def test_vote_multiple_on_multi_poll(self, client):
+        """Can vote for multiple options on allow_multiple poll."""
+        # Create a multi-choice poll
+        create_resp = client.post(
+            "/api/polls",
+            json={
+                "question": "Select all that apply",
+                "options": ["Option A", "Option B", "Option C"],
+                "allow_multiple": True,
+            },
+        )
+        assert create_resp.status_code == 201
+        poll_id = create_resp.json()["id"]
+
+        # Vote for multiple options
+        vote_resp = client.post(
+            "/api/polls/vote-multiple",
+            json={"poll_id": poll_id, "option_indices": [0, 2]},
+        )
+        assert vote_resp.status_code == 200
+        data = vote_resp.json()
+        assert data["success"] is True
+        assert data["votes_cast"] == 2
+        assert len(data["options"]) == 2
+
+    def test_vote_multiple_on_single_poll_fails(self, client):
+        """Cannot vote multiple on single-choice poll."""
+        # Create a single-choice poll
+        create_resp = client.post(
+            "/api/polls",
+            json={
+                "question": "Single choice only",
+                "options": ["Yes", "No"],
+                "allow_multiple": False,
+            },
+        )
+        assert create_resp.status_code == 201
+        poll_id = create_resp.json()["id"]
+
+        # Try to vote multiple - should fail
+        vote_resp = client.post(
+            "/api/polls/vote-multiple",
+            json={"poll_id": poll_id, "option_indices": [0, 1]},
+        )
+        assert vote_resp.status_code == 400
+        assert "does not allow multiple" in vote_resp.json()["detail"]
+
+    def test_vote_multiple_no_duplicates(self, client):
+        """Cannot vote for same option twice."""
+        # Create a multi-choice poll
+        create_resp = client.post(
+            "/api/polls",
+            json={
+                "question": "No duplicates",
+                "options": ["A", "B", "C"],
+                "allow_multiple": True,
+            },
+        )
+        assert create_resp.status_code == 201
+        poll_id = create_resp.json()["id"]
+
+        # Try duplicate options
+        vote_resp = client.post(
+            "/api/polls/vote-multiple",
+            json={"poll_id": poll_id, "option_indices": [0, 0]},
+        )
+        assert vote_resp.status_code == 400
+        assert "Duplicate" in vote_resp.json()["detail"]
+
+    def test_create_poll_with_closes_at(self, client):
+        """Can create poll with closing time."""
+        import time
+
+        closes_at = int(time.time()) + 3600  # 1 hour from now
+        response = client.post(
+            "/api/polls",
+            json={
+                "question": "Best time for festival?",
+                "options": ["Morning", "Afternoon"],
+                "closes_at": closes_at,
+            },
+        )
+        assert response.status_code == 201
+        data = response.json()
+        assert data["closes_at"] == closes_at
+
+    def test_create_scheduled_poll(self, client):
+        """Can create a scheduled poll with future opens_at."""
+        import time
+
+        opens_at = int(time.time()) + 3600  # 1 hour from now
+        response = client.post(
+            "/api/polls",
+            json={
+                "question": "What should happen tomorrow?",
+                "options": ["Option A", "Option B"],
+                "opens_at": opens_at,
+            },
+        )
+        assert response.status_code == 201
+        data = response.json()
+        assert data["status"] == "scheduled"
+        assert data["opens_at"] == opens_at
+
+    def test_create_poll_too_few_options(self, client):
+        """Poll creation fails with fewer than 2 options."""
+        response = client.post(
+            "/api/polls",
+            json={
+                "question": "Only one choice?",
+                "options": ["Only option"],
+            },
+        )
+        assert response.status_code == 400
+        assert "at least 2 options" in response.json()["detail"]
+
+    def test_create_poll_too_many_options(self, client):
+        """Poll creation fails with more than 10 options."""
+        response = client.post(
+            "/api/polls",
+            json={
+                "question": "Too many choices?",
+                "options": [f"Option {i}" for i in range(11)],
+            },
+        )
+        assert response.status_code == 400
+        assert "more than 10 options" in response.json()["detail"]
+
+    def test_process_schedules_endpoint(self, client):
+        """Can manually trigger schedule processing."""
+        response = client.post("/api/polls/process-schedules")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert "polls_opened" in data
+        assert "polls_closed" in data
+
 
 @pytest.mark.integration
 class TestDigestEndpoints:
