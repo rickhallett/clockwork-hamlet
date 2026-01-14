@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from hamlet.api.deps import get_db
 from hamlet.db import Event
-from hamlet.schemas.event import EventPage, EventResponse
+from hamlet.schemas.event import ArchiveStats, EventPage, EventResponse, FeedModeInfo
 
 
 class ExportFormat(str, Enum):
@@ -19,6 +19,13 @@ class ExportFormat(str, Enum):
 
     JSON = "json"
     CSV = "csv"
+
+
+class FeedMode(str, Enum):
+    """Feed display modes for FEED-9."""
+
+    LIVE = "live"
+    ARCHIVE = "archive"
 
 router = APIRouter(prefix="/api/events", tags=["events"])
 
@@ -151,6 +158,82 @@ async def get_highlights(
     )
 
     return [_event_to_response(e) for e in events]
+
+
+@router.get("/archive/stats", response_model=ArchiveStats)
+async def get_archive_stats(db: Session = Depends(get_db)):
+    """Get statistics about the archived events.
+
+    Returns metadata about the event archive including:
+    - Total number of events
+    - Oldest and newest timestamps
+    - Breakdown by event type
+    - Date range covered
+
+    This endpoint supports the FEED-9 archival mode toggle by providing
+    information about what historical data is available.
+    """
+    # Get total count
+    total_events = db.query(func.count(Event.id)).scalar() or 0
+
+    if total_events == 0:
+        return ArchiveStats(
+            total_events=0,
+            oldest_timestamp=None,
+            newest_timestamp=None,
+            event_types={},
+            date_range_days=0,
+        )
+
+    # Get oldest and newest timestamps
+    oldest_timestamp = db.query(func.min(Event.timestamp)).scalar()
+    newest_timestamp = db.query(func.max(Event.timestamp)).scalar()
+
+    # Calculate date range in days
+    date_range_days = 0
+    if oldest_timestamp and newest_timestamp:
+        date_range_days = (newest_timestamp - oldest_timestamp) // 86400  # seconds per day
+
+    # Get event type breakdown
+    type_counts = db.query(Event.type, func.count(Event.id)).group_by(Event.type).all()
+    event_types = {t: c for t, c in type_counts}
+
+    return ArchiveStats(
+        total_events=total_events,
+        oldest_timestamp=oldest_timestamp,
+        newest_timestamp=newest_timestamp,
+        event_types=event_types,
+        date_range_days=date_range_days,
+    )
+
+
+@router.get("/feed-mode", response_model=FeedModeInfo)
+async def get_feed_mode_info(
+    mode: FeedMode = Query(FeedMode.LIVE, description="Current feed mode"),
+    db: Session = Depends(get_db),
+):
+    """Get information about the current feed mode.
+
+    This endpoint helps clients understand the available feed modes and
+    provides relevant statistics for each mode.
+
+    FEED-9 feature: Toggle between live (SSE streaming) and archive
+    (historical database) modes.
+
+    - **live**: Real-time events via SSE streaming (default)
+    - **archive**: Historical events from database with full filtering
+    """
+    archive_stats = None
+    if mode == FeedMode.ARCHIVE:
+        # Get archive stats for archive mode
+        stats_response = await get_archive_stats(db)
+        archive_stats = stats_response
+
+    return FeedModeInfo(
+        mode=mode.value,
+        archive_stats=archive_stats,
+        live_connected=True,  # Always true if SSE is available
+    )
 
 
 @router.get("/export/{format}")
