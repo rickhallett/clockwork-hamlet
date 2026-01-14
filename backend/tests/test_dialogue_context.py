@@ -5,6 +5,7 @@ rich, personality-aware dialogue prompts for agents.
 
 Tests cover:
 - Trait voice hints based on personality traits
+- Wit hints for high charm/curiosity agents
 - Relationship subtext based on relationship scores and history
 - Shared memory hints for referencing past interactions
 """
@@ -21,6 +22,7 @@ from hamlet.llm.context import (
     get_running_joke_hints,
     get_shared_memory_hint,
     get_trait_voice_hints,
+    get_wit_hints,
 )
 
 
@@ -148,6 +150,177 @@ class TestTraitVoiceHints:
         hints = get_trait_voice_hints(agent)
 
         assert hints == "You speak in a straightforward manner"
+
+
+@pytest.mark.unit
+class TestWitHints:
+    """Test get_wit_hints() function.
+
+    This function generates wit/humor hints for agents with high charm
+    or curiosity traits to encourage clever, witty dialogue.
+    """
+
+    def test_high_charm_witty_banter(self, agent, db):
+        """Very high charm (>=9) triggers witty banter hint."""
+        traits = agent.traits_dict
+        traits["charm"] = 9
+        traits["curiosity"] = 5  # Keep moderate
+        agent.traits_dict = traits
+        db.flush()
+
+        hints = get_wit_hints(agent)
+
+        assert hints is not None
+        assert "witty banter" in hints.lower()
+        assert "clever" in hints.lower()
+
+    def test_moderate_high_charm_playful_remarks(self, agent, db):
+        """Moderately high charm (7-8) triggers playful remarks hint."""
+        traits = agent.traits_dict
+        traits["charm"] = 7
+        traits["curiosity"] = 5  # Keep moderate
+        agent.traits_dict = traits
+        db.flush()
+
+        hints = get_wit_hints(agent)
+
+        assert hints is not None
+        assert "playful remarks" in hints.lower()
+        assert "lighten the mood" in hints.lower()
+
+    def test_high_curiosity_clever_connections(self, agent, db):
+        """Very high curiosity (>=9) triggers clever connections hint."""
+        traits = agent.traits_dict
+        traits["charm"] = 5  # Keep moderate
+        traits["curiosity"] = 9
+        agent.traits_dict = traits
+        db.flush()
+
+        hints = get_wit_hints(agent)
+
+        assert hints is not None
+        assert "clever connections" in hints.lower()
+        assert "humorous edge" in hints.lower()
+
+    def test_moderate_high_curiosity_wry_comments(self, agent, db):
+        """Moderately high curiosity (7-8) triggers wry comments hint."""
+        traits = agent.traits_dict
+        traits["charm"] = 5  # Keep moderate
+        traits["curiosity"] = 7
+        agent.traits_dict = traits
+        db.flush()
+
+        hints = get_wit_hints(agent)
+
+        assert hints is not None
+        assert "wry comments" in hints.lower()
+        assert "interesting observations" in hints.lower()
+
+    def test_combined_high_charm_and_curiosity(self, agent, db):
+        """Both high charm and curiosity triggers combined sharp wit hint."""
+        traits = agent.traits_dict
+        traits["charm"] = 8
+        traits["curiosity"] = 8
+        agent.traits_dict = traits
+        db.flush()
+
+        hints = get_wit_hints(agent)
+
+        assert hints is not None
+        assert "sharp wit" in hints.lower()
+        assert "quick mind" in hints.lower()
+
+    def test_moderate_traits_no_wit_hints(self, agent, db):
+        """Moderate charm and curiosity returns None (no wit hints)."""
+        traits = {
+            "charm": 5,
+            "curiosity": 5,
+            "discretion": 5,
+            "empathy": 5,
+            "energy": 5,
+        }
+        agent.traits_dict = traits
+        db.flush()
+
+        hints = get_wit_hints(agent)
+
+        assert hints is None
+
+    def test_low_charm_no_wit_hints(self, agent, db):
+        """Low charm and moderate curiosity returns None."""
+        traits = agent.traits_dict
+        traits["charm"] = 3
+        traits["curiosity"] = 5
+        agent.traits_dict = traits
+        db.flush()
+
+        hints = get_wit_hints(agent)
+
+        assert hints is None
+
+    def test_charm_threshold_at_7(self, agent, db):
+        """Charm exactly at 7 triggers wit hints."""
+        traits = agent.traits_dict
+        traits["charm"] = 7
+        traits["curiosity"] = 5
+        agent.traits_dict = traits
+        db.flush()
+
+        hints = get_wit_hints(agent)
+
+        assert hints is not None
+
+    def test_charm_below_threshold(self, agent, db):
+        """Charm at 6 (below threshold) returns None."""
+        traits = agent.traits_dict
+        traits["charm"] = 6
+        traits["curiosity"] = 5
+        agent.traits_dict = traits
+        db.flush()
+
+        hints = get_wit_hints(agent)
+
+        assert hints is None
+
+    def test_curiosity_threshold_at_7(self, agent, db):
+        """Curiosity exactly at 7 triggers wit hints."""
+        traits = agent.traits_dict
+        traits["charm"] = 5
+        traits["curiosity"] = 7
+        agent.traits_dict = traits
+        db.flush()
+
+        hints = get_wit_hints(agent)
+
+        assert hints is not None
+
+    def test_curiosity_below_threshold(self, agent, db):
+        """Curiosity at 6 (below threshold) returns None."""
+        traits = agent.traits_dict
+        traits["charm"] = 5
+        traits["curiosity"] = 6
+        agent.traits_dict = traits
+        db.flush()
+
+        hints = get_wit_hints(agent)
+
+        assert hints is None
+
+    def test_max_charm_and_curiosity(self, agent, db):
+        """Maximum charm (10) and curiosity (10) produces all wit hints."""
+        traits = agent.traits_dict
+        traits["charm"] = 10
+        traits["curiosity"] = 10
+        agent.traits_dict = traits
+        db.flush()
+
+        hints = get_wit_hints(agent)
+
+        assert hints is not None
+        # Should include both very high charm and curiosity hints, plus combined
+        assert "witty banter" in hints.lower()
+        assert "clever connections" in hints.lower()
+        assert "sharp wit" in hints.lower()
 
 
 @pytest.mark.unit
@@ -593,6 +766,75 @@ class TestBuildDialoguePrompt:
 
         # Running jokes section should NOT appear for negative relationships
         assert "RUNNING JOKES" not in prompt
+
+    def test_includes_wit_section_for_high_charm(self, world, agent, db):
+        """Built prompt includes YOUR WIT section for high charm agents."""
+        target = world.get_agent("bob")
+
+        # Set high charm
+        traits = agent.traits_dict
+        traits["charm"] = 8
+        traits["curiosity"] = 5  # Keep moderate
+        agent.traits_dict = traits
+        db.flush()
+
+        prompt = build_dialogue_prompt(agent, target, world)
+
+        assert "YOUR WIT:" in prompt
+        assert "playful remarks" in prompt.lower()
+
+    def test_includes_wit_section_for_high_curiosity(self, world, agent, db):
+        """Built prompt includes YOUR WIT section for high curiosity agents."""
+        target = world.get_agent("bob")
+
+        # Set high curiosity
+        traits = agent.traits_dict
+        traits["charm"] = 5  # Keep moderate
+        traits["curiosity"] = 8
+        agent.traits_dict = traits
+        db.flush()
+
+        prompt = build_dialogue_prompt(agent, target, world)
+
+        assert "YOUR WIT:" in prompt
+        assert "observations" in prompt.lower()
+
+    def test_no_wit_section_for_moderate_traits(self, world, agent, db):
+        """Built prompt does NOT include YOUR WIT for moderate trait agents."""
+        target = world.get_agent("bob")
+
+        # Set all moderate traits
+        traits = {
+            "charm": 5,
+            "curiosity": 5,
+            "discretion": 5,
+            "empathy": 5,
+            "energy": 5,
+        }
+        agent.traits_dict = traits
+        db.flush()
+
+        prompt = build_dialogue_prompt(agent, target, world)
+
+        assert "YOUR WIT:" not in prompt
+
+    def test_combined_wit_for_charming_curious_agent(self, world, agent, db):
+        """High charm and curiosity agent gets combined wit section."""
+        target = world.get_agent("bob")
+
+        # Set both high charm and curiosity
+        traits = agent.traits_dict
+        traits["charm"] = 9
+        traits["curiosity"] = 9
+        agent.traits_dict = traits
+        db.flush()
+
+        prompt = build_dialogue_prompt(agent, target, world)
+
+        assert "YOUR WIT:" in prompt
+        assert "sharp wit" in prompt.lower()
+        assert "witty banter" in prompt.lower()
+        assert "clever connections" in prompt.lower()
 
 
 @pytest.mark.integration

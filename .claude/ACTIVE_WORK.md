@@ -25,6 +25,8 @@ Format:
 |-------|--------|--------|---------------|---------|--------|
 | F | POLL-9 | feat/poll/agent-voting | claude-opus | 2026-01-14 | complete |
 | L | LIFE-26,27,28,29 | feat/life/dramatic-events | claude-opus-4.5 | 2026-01-14 | complete |
+| E | DASH-9,10,11,12 | feat/dash/stats-endpoints | claude-opus-stats | 2026-01-14 | complete |
+| H | FEED-8,9 | feat/feed/export-csv | claude-opus | 2026-01-14 | complete |
 
 ---
 

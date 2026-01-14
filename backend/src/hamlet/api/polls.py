@@ -1,12 +1,14 @@
 """Poll API routes."""
 
+import time
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from hamlet.api.deps import get_db
 from hamlet.db import Agent, Poll
-from hamlet.schemas.poll import PollResponse
+from hamlet.schemas.poll import MultiVoteRequest, PollCreate, PollResponse
 from hamlet.simulation.polls import (
     decide_vote,
     get_voting_summary,
@@ -23,15 +25,65 @@ class VoteRequest(BaseModel):
     option: int  # Index of the option
 
 
+def process_poll_schedules(db: Session) -> dict:
+    """Process poll schedules - open scheduled polls and close expired ones.
+
+    Returns a summary of changes made.
+    """
+    now = int(time.time())
+    opened = []
+    closed = []
+
+    # Open scheduled polls whose opens_at time has passed
+    scheduled_polls = db.query(Poll).filter(Poll.status == "scheduled").all()
+    for poll in scheduled_polls:
+        if poll.opens_at and poll.opens_at <= now:
+            poll.status = "active"
+            opened.append(poll.id)
+
+    # Close active polls whose closes_at time has passed
+    active_polls = db.query(Poll).filter(Poll.status == "active").all()
+    for poll in active_polls:
+        if poll.closes_at and poll.closes_at <= now:
+            poll.status = "closed"
+            closed.append(poll.id)
+
+    if opened or closed:
+        db.commit()
+
+    return {"opened": opened, "closed": closed}
+
+
 @router.get("/active", response_model=PollResponse | None)
 async def get_active_poll(db: Session = Depends(get_db)):
-    """Get the currently active poll."""
+    """Get the currently active poll.
+
+    Automatically processes scheduled polls before returning.
+    """
+    # Process any pending schedule changes
+    process_poll_schedules(db)
+
     poll = db.query(Poll).filter(Poll.status == "active").first()
 
     if not poll:
         return None
 
     return _poll_to_response(poll)
+
+
+@router.post("/process-schedules")
+async def trigger_schedule_processing(db: Session = Depends(get_db)):
+    """Manually trigger poll schedule processing.
+
+    Opens scheduled polls whose opens_at time has passed.
+    Closes active polls whose closes_at time has passed.
+    """
+    result = process_poll_schedules(db)
+    return {
+        "success": True,
+        "polls_opened": result["opened"],
+        "polls_closed": result["closed"],
+    }
 
 
 @router.get("/{poll_id}", response_model=PollResponse)
@@ -45,7 +97,7 @@ async def get_poll(poll_id: int, db: Session = Depends(get_db)):
 
 @router.post("/vote")
 async def submit_vote(vote: VoteRequest, db: Session = Depends(get_db)):
-    """Submit a vote for a poll option."""
+    """Submit a vote for a poll option (single choice)."""
     poll = db.query(Poll).filter(Poll.id == vote.poll_id).first()
 
     if not poll:
@@ -75,6 +127,62 @@ async def submit_vote(vote: VoteRequest, db: Session = Depends(get_db)):
     }
 
 
+@router.post("/vote-multiple")
+async def submit_multiple_votes(vote: MultiVoteRequest, db: Session = Depends(get_db)):
+    """Submit votes for multiple poll options.
+
+    Only works for polls with allow_multiple=True.
+    """
+    poll = db.query(Poll).filter(Poll.id == vote.poll_id).first()
+
+    if not poll:
+        raise HTTPException(status_code=404, detail=f"Poll {vote.poll_id} not found")
+
+    if poll.status != "active":
+        raise HTTPException(status_code=400, detail="Poll is not active")
+
+    if not poll.allow_multiple:
+        raise HTTPException(
+            status_code=400,
+            detail="This poll does not allow multiple selections. Use /vote endpoint instead.",
+        )
+
+    if not vote.option_indices:
+        raise HTTPException(status_code=400, detail="Must select at least one option")
+
+    options = poll.options_list
+    # Validate all option indices
+    for idx in vote.option_indices:
+        if idx < 0 or idx >= len(options):
+            raise HTTPException(status_code=400, detail=f"Invalid option {idx}. Must be 0-{len(options) - 1}")
+
+    # Check for duplicates
+    if len(vote.option_indices) != len(set(vote.option_indices)):
+        raise HTTPException(status_code=400, detail="Duplicate options not allowed")
+
+    # Update vote counts for all selected options
+    votes = poll.votes_dict
+    updated = []
+    for idx in vote.option_indices:
+        option_key = str(idx)
+        votes[option_key] = votes.get(option_key, 0) + 1
+        updated.append({
+            "option": idx,
+            "option_text": options[idx],
+            "new_count": votes[option_key],
+        })
+    poll.votes_dict = votes
+
+    db.commit()
+
+    return {
+        "success": True,
+        "poll_id": poll.id,
+        "votes_cast": len(vote.option_indices),
+        "options": updated,
+    }
+
+
 @router.get("", response_model=list[PollResponse])
 async def list_polls(
     status: str | None = None,
@@ -82,6 +190,9 @@ async def list_polls(
     db: Session = Depends(get_db),
 ):
     """List all polls, optionally filtered by status and/or category."""
+    # Process schedules to ensure accurate status
+    process_poll_schedules(db)
+
     query = db.query(Poll)
     if status:
         query = query.filter(Poll.status == status)
@@ -89,6 +200,47 @@ async def list_polls(
         query = query.filter(Poll.category == category)
     polls = query.order_by(Poll.created_at.desc()).all()
     return [_poll_to_response(p) for p in polls]
+
+
+@router.post("", response_model=PollResponse, status_code=201)
+async def create_poll(poll_data: PollCreate, db: Session = Depends(get_db)):
+    """Create a new poll (admin endpoint).
+
+    If opens_at is provided and in the future, poll starts as 'scheduled'.
+    Otherwise, poll starts as 'active'.
+    """
+    if len(poll_data.options) < 2:
+        raise HTTPException(status_code=400, detail="Poll must have at least 2 options")
+
+    if len(poll_data.options) > 10:
+        raise HTTPException(status_code=400, detail="Poll cannot have more than 10 options")
+
+    now = int(time.time())
+
+    # Determine initial status based on opens_at
+    if poll_data.opens_at and poll_data.opens_at > now:
+        status = "scheduled"
+    else:
+        status = "active"
+
+    poll = Poll(
+        question=poll_data.question,
+        created_at=now,
+        opens_at=poll_data.opens_at,
+        closes_at=poll_data.closes_at,
+        allow_multiple=poll_data.allow_multiple,
+        category=poll_data.category,
+        status=status,
+    )
+    poll.options_list = poll_data.options
+    poll.votes_dict = {}
+    poll.tags_list = poll_data.tags
+
+    db.add(poll)
+    db.commit()
+    db.refresh(poll)
+
+    return _poll_to_response(poll)
 
 
 class AgentVoteRequest(BaseModel):
@@ -206,7 +358,9 @@ def _poll_to_response(poll: Poll) -> PollResponse:
         votes=poll.votes_dict,
         status=poll.status,
         created_at=poll.created_at,
+        opens_at=poll.opens_at,
         closes_at=poll.closes_at,
         category=poll.category,
         tags=poll.tags_list,
+        allow_multiple=poll.allow_multiple,
     )
