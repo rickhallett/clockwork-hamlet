@@ -1,6 +1,10 @@
 """FastAPI application entry point."""
 
+import asyncio
+import logging
+
 import uvicorn
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -15,11 +19,48 @@ from hamlet.api import (
     world_router,
 )
 from hamlet.config import settings
+from hamlet.db.seed import seed_database
+from hamlet.simulation.engine import SimulationEngine
+
+logger = logging.getLogger(__name__)
+
+# Global simulation engine instance
+simulation_engine: SimulationEngine | None = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan - startup and shutdown events."""
+    global simulation_engine
+
+    # Startup
+    logger.info("Starting Clockwork Hamlet...")
+
+    # 1. Seed database if empty
+    logger.info("Checking database...")
+    seed_database()
+
+    # 2. Start simulation engine
+    logger.info("Starting simulation engine...")
+    simulation_engine = SimulationEngine(tick_interval=settings.tick_interval_seconds)
+    await simulation_engine.start()
+
+    logger.info("Clockwork Hamlet is running!")
+
+    yield
+
+    # Shutdown
+    logger.info("Shutting down Clockwork Hamlet...")
+    if simulation_engine:
+        await simulation_engine.stop()
+    logger.info("Goodbye!")
+
 
 app = FastAPI(
     title=settings.app_name,
     description="AI-driven village simulation with emergent narratives",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 # CORS middleware for frontend
@@ -30,6 +71,8 @@ app.add_middleware(
         "http://127.0.0.1:5173",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
+        "http://localhost:3003",
+        "http://127.0.0.1:3003",
         # Add production domains here
     ],
     allow_credentials=True,
