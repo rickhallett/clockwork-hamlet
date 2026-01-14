@@ -269,3 +269,20 @@ class WorldState(Base):
     current_hour = Column(Float, default=6.0)  # 0-24
     season = Column(String(20), default="spring")
     weather = Column(String(30), default="clear")
+
+
+class LLMUsage(Base):
+    """Record of LLM API usage for cost tracking."""
+
+    __tablename__ = "llm_usage"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    timestamp = Column(Float, nullable=False)  # Unix timestamp with decimals
+    model = Column(String(50), nullable=False)
+    tokens_in = Column(Integer, default=0)
+    tokens_out = Column(Integer, default=0)
+    cost_usd = Column(Float, default=0.0)
+    latency_ms = Column(Float, default=0.0)
+    cached = Column(Boolean, default=False)
+    agent_id = Column(String(50))  # Which agent triggered this call
+    call_type = Column(String(30), default="decision")  # decision, dialogue, compression

@@ -6,6 +6,7 @@ from hamlet.db.models import (
     Base,
     Event,
     Goal,
+    LLMUsage,
     Location,
     Memory,
     Poll,
@@ -28,6 +29,7 @@ __all__ = [
     "Event",
     "Poll",
     "WorldState",
+    "LLMUsage",
     "seed_database",
     "reset_database",
 ]

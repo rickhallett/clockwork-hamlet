@@ -16,6 +16,7 @@ class EventType(Enum):
     DISCOVERY = "discovery"
     SYSTEM = "system"
     TICK = "tick"
+    LLM_USAGE = "llm_usage"
 
 
 @dataclass

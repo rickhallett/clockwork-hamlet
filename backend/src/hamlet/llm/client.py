@@ -104,6 +104,15 @@ class LLMClient:
             cached = self.cache.get(prompt, self.model)
             if cached:
                 logger.debug("Cache hit for LLM request")
+                # Track cached call
+                from hamlet.llm.usage import get_usage_tracker
+                get_usage_tracker().record_call(
+                    model=self.model,
+                    tokens_in=0,
+                    tokens_out=0,
+                    latency_ms=0,
+                    cached=True,
+                )
                 return cached
 
         # Make API call
@@ -137,6 +146,16 @@ class LLMClient:
 
             logger.debug(
                 f"LLM call: {result.tokens_in} in, {result.tokens_out} out, {latency_ms:.0f}ms"
+            )
+
+            # Track usage
+            from hamlet.llm.usage import get_usage_tracker
+            get_usage_tracker().record_call(
+                model=self.model,
+                tokens_in=result.tokens_in,
+                tokens_out=result.tokens_out,
+                latency_ms=latency_ms,
+                cached=False,
             )
 
             return result
