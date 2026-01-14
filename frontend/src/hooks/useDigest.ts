@@ -87,6 +87,58 @@ to surprise us all.`,
   generated_at: new Date().toISOString(),
 }
 
+// Transform API response to frontend Digest format
+function transformDailyDigest(data: Record<string, unknown>): Digest {
+  const headlines = (data.headlines as Array<{summary: string; significance: number; type: string}>) || []
+  const otherEvents = (data.other_events as Array<{summary: string; type: string}>) || []
+
+  return {
+    id: data.day as number || 1,
+    type: 'daily',
+    title: 'THE DAILY HAMLET',
+    headline: headlines[0]?.summary || 'A Quiet Day in the Village',
+    summary: headlines.length > 0
+      ? `Today saw ${data.total_events_today || 0} notable events in Clockwork Hamlet.`
+      : 'The village enjoyed a peaceful day with little of note occurring.',
+    highlights: [
+      ...headlines.map(h => ({
+        title: h.summary,
+        description: `A ${h.type} event of significance.`,
+        agents_involved: [] as string[],
+        significance: h.significance || 1,
+      })),
+      ...otherEvents.slice(0, 3).map(e => ({
+        title: e.summary,
+        description: `A ${e.type} event.`,
+        agents_involved: [] as string[],
+        significance: 1,
+      })),
+    ],
+    day: data.day as number || 1,
+    generated_at: new Date((data.generated_at as number || Date.now()) * 1000).toISOString(),
+  }
+}
+
+function transformWeeklyDigest(data: Record<string, unknown>): Digest {
+  const topStories = (data.top_stories as string[]) || []
+
+  return {
+    id: data.week_ending_day as number || 1,
+    type: 'weekly',
+    title: 'THE WEEKLY HAMLET CHRONICLE',
+    headline: topStories[0] || 'A Week of Village Life',
+    summary: `This week saw ${data.total_significant_events || 0} significant events unfold in Clockwork Hamlet.`,
+    highlights: topStories.slice(0, 5).map((story, idx) => ({
+      title: story,
+      description: 'A notable event from this week.',
+      agents_involved: [] as string[],
+      significance: 5 - idx,
+    })),
+    day: data.week_ending_day as number || 1,
+    generated_at: new Date((data.generated_at as number || Date.now()) * 1000).toISOString(),
+  }
+}
+
 export function useDigest(type: 'daily' | 'weekly' = 'daily'): UseDigestReturn {
   const [digest, setDigest] = useState<Digest | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -106,7 +158,11 @@ export function useDigest(type: 'daily' | 'weekly' = 'daily'): UseDigestReturn {
         throw new Error(`Failed to fetch digest: ${response.statusText}`)
       }
       const data = await response.json()
-      setDigest(data)
+      // Transform API response to expected format
+      const transformed = type === 'daily'
+        ? transformDailyDigest(data)
+        : transformWeeklyDigest(data)
+      setDigest(transformed)
     } catch (err) {
       // Use placeholder if API fails
       setDigest(type === 'daily' ? PLACEHOLDER_DAILY_DIGEST : PLACEHOLDER_WEEKLY_DIGEST)

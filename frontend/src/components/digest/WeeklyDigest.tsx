@@ -33,7 +33,7 @@ export function WeeklyDigest({ digest }: WeeklyDigestProps) {
       </div>
 
       {/* Feature Stories */}
-      {digest.highlights.length > 0 && (
+      {digest.highlights && digest.highlights.length > 0 && (
         <div className="px-8 py-6">
           <h3 className="text-xl font-bold uppercase tracking-wide mb-6 flex items-center gap-3">
             <span className="flex-1 h-px bg-[#1a1a1a]/30" />
@@ -55,7 +55,7 @@ export function WeeklyDigest({ digest }: WeeklyDigestProps) {
                   <p className="text-[#1a1a1a]/80 mb-3">
                     {highlight.description}
                   </p>
-                  {highlight.agents_involved.length > 0 && (
+                  {highlight.agents_involved && highlight.agents_involved.length > 0 && (
                     <div className="flex flex-wrap gap-1">
                       <span className="text-sm text-[#1a1a1a]/60 mr-2">Featuring:</span>
                       {highlight.agents_involved.map((agent) => (

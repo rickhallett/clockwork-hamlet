@@ -49,7 +49,7 @@ export function DailyDigest({ digest }: DailyDigestProps) {
       </div>
 
       {/* Highlights */}
-      {digest.highlights.length > 0 && (
+      {digest.highlights && digest.highlights.length > 0 && (
         <div className="px-6 py-4 border-t border-[#1a1a1a]/20">
           <h3 className="text-lg font-bold uppercase tracking-wide mb-4 border-b border-[#1a1a1a]/20 pb-2">
             Today&apos;s Highlights
@@ -64,7 +64,7 @@ export function DailyDigest({ digest }: DailyDigestProps) {
                 <p className="text-sm text-[#1a1a1a]/80 mb-3">
                   {highlight.description}
                 </p>
-                {highlight.agents_involved.length > 0 && (
+                {highlight.agents_involved && highlight.agents_involved.length > 0 && (
                   <div className="flex flex-wrap gap-1">
                     {highlight.agents_involved.map((agent) => (
                       <Badge key={agent} variant="blue" className="!bg-[#1a1a1a]/10 !text-[#1a1a1a]">
