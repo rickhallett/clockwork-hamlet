@@ -3,18 +3,16 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from hamlet.db.connection import engine
-from hamlet.db.models import Base
-from hamlet.db.seed import seed_database
 from hamlet.main import app
 
 
 @pytest.fixture
-def client():
-    """Create test client."""
-    # Ensure all tables exist (including new auth tables)
-    Base.metadata.create_all(bind=engine)
-    seed_database()
+def client(isolated_db_session):
+    """Create test client with isolated database session.
+
+    The isolated_db_session fixture from conftest.py patches SessionLocal
+    and provides transaction rollback isolation between tests.
+    """
     return TestClient(app)
 
 
