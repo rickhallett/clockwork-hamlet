@@ -10,6 +10,7 @@ export interface VillageEvent {
   location_id?: string
   location_name?: string
   details?: Record<string, unknown>
+  significance: 1 | 2 | 3
 }
 
 interface StreamFilters {
@@ -136,6 +137,7 @@ export function useVillageStream(options: UseVillageStreamOptions = {}): UseVill
             location_id: data.location_id,
             location_name: data.location_name || data.location_id,
             details: data.details || (data.detail ? { detail: data.detail } : data.data),
+            significance: (data.significance >= 1 && data.significance <= 3 ? data.significance : 1) as 1 | 2 | 3,
           }
 
           addEvent(event)
