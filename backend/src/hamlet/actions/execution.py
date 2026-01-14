@@ -11,6 +11,11 @@ from hamlet.simulation.world import World
 
 logger = logging.getLogger(__name__)
 
+
+def format_object_name(obj_id: str) -> str:
+    """Convert object ID to readable name: mysterious_portrait -> mysterious portrait."""
+    return obj_id.replace("_", " ")
+
 # Receptiveness threshold for social actions
 RECEPTIVENESS_THRESHOLD = 0.3
 
@@ -109,11 +114,12 @@ def execute_move(action: Action, actor: Agent, world: World) -> ActionResult:
 
 def execute_examine(action: Action, actor: Agent, world: World) -> ActionResult:
     """Execute an examine action."""
-    target = action.target_object or action.target_id
+    target_id = action.target_object or action.target_id
+    target_name = format_object_name(target_id)
     record_event(
         world,
         "action",
-        f"{actor.name} examined the {target}",
+        f"{actor.name} examined the {target_name}",
         [actor.id],
         actor.location_id,
     )
@@ -122,20 +128,21 @@ def execute_examine(action: Action, actor: Agent, world: World) -> ActionResult:
     create_memory(
         world,
         actor,
-        f"I examined the {target}",
+        f"I examined the {target_name}",
         significance=2,
     )
 
     return ActionResult(
         success=True,
         action=action,
-        message=f"{actor.name} examined {target}",
+        message=f"{actor.name} examined the {target_name}",
     )
 
 
 def execute_take(action: Action, actor: Agent, world: World) -> ActionResult:
     """Execute a take action."""
     item = action.target_object
+    item_name = format_object_name(item)
 
     # Remove from location
     if actor.location_id:
@@ -154,7 +161,7 @@ def execute_take(action: Action, actor: Agent, world: World) -> ActionResult:
     record_event(
         world,
         "action",
-        f"{actor.name} took the {item}",
+        f"{actor.name} picked up the {item_name}",
         [actor.id],
         actor.location_id,
     )
@@ -162,13 +169,14 @@ def execute_take(action: Action, actor: Agent, world: World) -> ActionResult:
     return ActionResult(
         success=True,
         action=action,
-        message=f"{actor.name} took {item}",
+        message=f"{actor.name} picked up the {item_name}",
     )
 
 
 def execute_drop(action: Action, actor: Agent, world: World) -> ActionResult:
     """Execute a drop action."""
     item = action.target_object
+    item_name = format_object_name(item)
 
     # Remove from inventory
     # CLAUDE: why does this pattern below repeat in many functions? does this serve a benefit over actor.inventory_list.remove(item) ?
@@ -187,7 +195,7 @@ def execute_drop(action: Action, actor: Agent, world: World) -> ActionResult:
     record_event(
         world,
         "action",
-        f"{actor.name} dropped the {item}",
+        f"{actor.name} put down the {item_name}",
         [actor.id],
         actor.location_id,
     )
@@ -195,7 +203,7 @@ def execute_drop(action: Action, actor: Agent, world: World) -> ActionResult:
     return ActionResult(
         success=True,
         action=action,
-        message=f"{actor.name} dropped {item}",
+        message=f"{actor.name} put down the {item_name}",
     )
 
 
@@ -359,6 +367,7 @@ def execute_give(action: Action, actor: Agent, world: World) -> ActionResult:
     """Execute a give action."""
     target = world.get_agent(action.target_id)
     item = action.target_object
+    item_name = format_object_name(item)
 
     # Transfer item
     actor_inv = actor.inventory_list
@@ -372,22 +381,22 @@ def execute_give(action: Action, actor: Agent, world: World) -> ActionResult:
     record_event(
         world,
         "action",
-        f"{actor.name} gave {item} to {target.name}",
+        f"{actor.name} gave {item_name} to {target.name}",
         [actor.id, target.id],
         actor.location_id,
     )
 
     # Giving improves relationship
-    update_relationship(world, target.id, actor.id, 2, f"received {item}")
-    update_relationship(world, actor.id, target.id, 1, f"gave {item}")
+    update_relationship(world, target.id, actor.id, 2, f"received {item_name}")
+    update_relationship(world, actor.id, target.id, 1, f"gave {item_name}")
 
-    create_memory(world, actor, f"I gave {item} to {target.name}", significance=5)
-    create_memory(world, target, f"{actor.name} gave me {item}", significance=6)
+    create_memory(world, actor, f"I gave the {item_name} to {target.name}", significance=5)
+    create_memory(world, target, f"{actor.name} gave me the {item_name}", significance=6)
 
     return ActionResult(
         success=True,
         action=action,
-        message=f"{actor.name} gave {item} to {target.name}",
+        message=f"{actor.name} gave the {item_name} to {target.name}",
     )
 
 
