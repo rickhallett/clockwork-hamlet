@@ -1,10 +1,11 @@
 import { useState, useCallback, useMemo } from 'react'
-import { useVillageStream } from '../hooks'
+import { useVillageStream, VillageEvent } from '../hooks'
 import { EventStream, FilterBar } from '../components/feed'
 
 export function LiveFeed() {
   const [activeTypes, setActiveTypes] = useState<string[]>([])
   const [groupByTime, setGroupByTime] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
 
   const filters = useMemo(
     () => ({
@@ -16,6 +17,26 @@ export function LiveFeed() {
   const { events, isConnected, isPaused, error, pause, resume, clearEvents } =
     useVillageStream({ filters, maxEvents: 100 })
 
+  // Filter events by search query (client-side)
+  const filteredEvents = useMemo(() => {
+    if (!searchQuery.trim()) return events
+
+    const query = searchQuery.toLowerCase()
+    return events.filter((event: VillageEvent) => {
+      const searchableText = [
+        event.summary,
+        event.agent_name,
+        event.location_name,
+        event.type,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+
+      return searchableText.includes(query)
+    })
+  }, [events, searchQuery])
+
   const handleToggleType = useCallback((type: string) => {
     setActiveTypes((prev) =>
       prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
@@ -24,6 +45,11 @@ export function LiveFeed() {
 
   const handleClearFilters = useCallback(() => {
     setActiveTypes([])
+    setSearchQuery('')
+  }, [])
+
+  const handleSearchChange = useCallback((query: string) => {
+    setSearchQuery(query)
   }, [])
 
   const handleToggleGrouping = useCallback(() => {
@@ -68,10 +94,12 @@ export function LiveFeed() {
         onClear={handleClearFilters}
         groupByTime={groupByTime}
         onToggleGrouping={handleToggleGrouping}
+        searchQuery={searchQuery}
+        onSearchChange={handleSearchChange}
       />
 
       <EventStream
-        events={events}
+        events={filteredEvents}
         isPaused={isPaused}
         onPause={pause}
         onResume={resume}

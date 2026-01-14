@@ -6,6 +6,8 @@ interface FilterBarProps {
   onClear: () => void
   groupByTime: boolean
   onToggleGrouping: () => void
+  searchQuery: string
+  onSearchChange: (query: string) => void
 }
 
 const EVENT_TYPES = [
@@ -22,8 +24,10 @@ export function FilterBar({
   onClear,
   groupByTime,
   onToggleGrouping,
+  searchQuery,
+  onSearchChange,
 }: FilterBarProps) {
-  const hasFilters = activeTypes.length > 0
+  const hasFilters = activeTypes.length > 0 || searchQuery.length > 0
 
   return (
     <div className="flex items-center justify-between flex-wrap gap-3">
@@ -55,16 +59,36 @@ export function FilterBar({
         )}
       </div>
 
-      <button
-        onClick={onToggleGrouping}
-        className={`text-sm px-3 py-1 rounded border transition-colors ${
-          groupByTime
-            ? 'border-accent-cyan text-accent-cyan bg-accent-cyan/10'
-            : 'border-bg-highlight text-fg-dim hover:text-fg-secondary hover:border-fg-dim'
-        }`}
-      >
-        {groupByTime ? 'Grouped' : 'Group by time'}
-      </button>
+      <div className="flex items-center gap-3">
+        <div className="relative">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
+            placeholder="Search events..."
+            className="bg-bg-secondary border border-bg-highlight rounded px-3 py-1.5 text-sm text-fg-secondary placeholder:text-fg-dim focus:outline-none focus:border-accent-cyan transition-colors w-48"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => onSearchChange('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-fg-dim hover:text-fg-secondary transition-colors"
+            >
+              ×
+            </button>
+          )}
+        </div>
+
+        <button
+          onClick={onToggleGrouping}
+          className={`text-sm px-3 py-1 rounded border transition-colors ${
+            groupByTime
+              ? 'border-accent-cyan text-accent-cyan bg-accent-cyan/10'
+              : 'border-bg-highlight text-fg-dim hover:text-fg-secondary hover:border-fg-dim'
+          }`}
+        >
+          {groupByTime ? 'Grouped' : 'Group by time'}
+        </button>
+      </div>
     </div>
   )
 }
