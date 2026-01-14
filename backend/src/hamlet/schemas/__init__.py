@@ -11,6 +11,7 @@ from hamlet.schemas.agent import (
 from hamlet.schemas.event import (
     EventBase,
     EventCreate,
+    EventPage,
     EventResponse,
 )
 from hamlet.schemas.goal import (
@@ -64,6 +65,7 @@ __all__ = [
     "GoalResponse",
     "EventBase",
     "EventCreate",
+    "EventPage",
     "EventResponse",
     "PollBase",
     "PollCreate",

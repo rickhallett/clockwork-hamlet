@@ -168,6 +168,7 @@ def isolated_db_session(
         patch("hamlet.db.connection.get_db", mock_get_db),
         patch("hamlet.db.get_db", mock_get_db),
         patch("hamlet.simulation.world.SessionLocal", test_session_factory),
+        patch("hamlet.api.deps.SessionLocal", test_session_factory),
     ]
 
     # Start all patchers
