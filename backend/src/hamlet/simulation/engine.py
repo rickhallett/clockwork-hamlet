@@ -16,11 +16,22 @@ logger = logging.getLogger(__name__)
 class SimulationEngine:
     """The core simulation engine that runs the tick loop."""
 
-    def __init__(self, tick_interval: float | None = None):
+    def __init__(self, tick_interval: float | None = None, use_llm: bool | None = None):
         self.tick_interval = tick_interval or settings.tick_interval_seconds
         self.running = False
         self.world = World(event_bus)
         self._task: asyncio.Task | None = None
+
+        # Use LLM if API key is configured, unless explicitly disabled
+        if use_llm is None:
+            self.use_llm = bool(settings.anthropic_api_key)
+        else:
+            self.use_llm = use_llm
+
+        if self.use_llm:
+            logger.info("LLM decision-making enabled")
+        else:
+            logger.info("LLM disabled - using random actions")
 
     async def start(self) -> None:
         """Start the simulation loop."""
@@ -114,10 +125,44 @@ class SimulationEngine:
 
     async def _process_agent(self, agent: Agent) -> None:
         """Process a single agent's turn."""
-        # Get perception
-        perception = self.world.get_agent_perception(agent)
+        if self.use_llm:
+            await self._process_agent_llm(agent)
+        else:
+            await self._process_agent_random(agent)
 
-        # For now, random actions (LLM integration comes in Phase 4)
+    async def _process_agent_llm(self, agent: Agent) -> None:
+        """Process agent turn using LLM decision-making."""
+        # Lazy imports to avoid circular dependency
+        from hamlet.actions import execute_action
+        from hamlet.llm.agent import decide_action
+
+        try:
+            # LLM decides action
+            action = decide_action(agent, self.world)
+
+            # Execute the action through the action system
+            result = execute_action(action, self.world)
+
+            if result.success:
+                logger.info(f"  {agent.name}: {result.message}")
+                # Publish to event bus for SSE streaming
+                await self.world.publish_event(
+                    EventType.ACTION,
+                    result.message,
+                    actors=[agent.id],
+                    location_id=agent.location_id,
+                )
+            else:
+                logger.debug(f"  {agent.name} action failed: {result.message}")
+
+        except Exception as e:
+            logger.error(f"LLM decision failed for {agent.name}: {e}")
+            # Fall back to random action on LLM failure
+            await self._process_agent_random(agent)
+
+    async def _process_agent_random(self, agent: Agent) -> None:
+        """Process agent turn using random actions (fallback)."""
+        perception = self.world.get_agent_perception(agent)
         action = self._choose_random_action(agent, perception)
 
         if action:
