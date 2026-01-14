@@ -24,6 +24,7 @@ Format:
 | Track | Ticket | Branch | Agent Session | Started | Status |
 |-------|--------|--------|---------------|---------|--------|
 | F | POLL-9 | feat/poll/agent-voting | claude-opus | 2026-01-14 | complete |
+| L | LIFE-26,27,28,29 | feat/life/dramatic-events | claude-opus-4.5 | 2026-01-14 | starting |
 
 ---
 

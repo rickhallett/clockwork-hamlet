@@ -7,6 +7,14 @@ import time
 
 from hamlet.config import settings
 from hamlet.db import Agent, Event
+from hamlet.simulation.dramatic import (
+    check_random_village_event,
+    generate_conflict_escalation_dialogue,
+    generate_romance_dialogue,
+    generate_secret_reaction,
+    process_conflict_aftermath,
+    process_romance_aftermath,
+)
 from hamlet.simulation.events import EventType, event_bus
 from hamlet.simulation.greetings import generate_arrival_comment
 from hamlet.simulation.idle import IdleBehavior, get_idle_behavior
@@ -119,10 +127,13 @@ class SimulationEngine:
         for agent in active_agents:
             await self._process_agent(agent)
 
-        # 6. Commit all changes
+        # 6. Check for village-wide dramatic events (LIFE-29)
+        await self._check_village_events(agents, hour, day)
+
+        # 7. Commit all changes
         self.world.commit()
 
-        # 7. Log agent states
+        # 8. Log agent states
         for agent in agents:
             logger.debug(
                 f"  {agent.name}: hunger={agent.hunger:.1f}, "
@@ -501,6 +512,25 @@ class SimulationEngine:
             location_id=agent.location_id,
             significance=behavior.significance,
         )
+
+    async def _check_village_events(
+        self, agents: list[Agent], current_hour: float, current_day: int
+    ) -> None:
+        """Check for and process village-wide dramatic events (LIFE-29)."""
+        village_event = check_random_village_event(
+            self.world.db, agents, current_hour, current_day
+        )
+
+        if village_event:
+            logger.info(f"  [VILLAGE EVENT] {village_event.description}")
+
+            await self.world.publish_event(
+                EventType.SYSTEM,
+                village_event.description,
+                actors=village_event.affected_agents[:5],  # Limit actor list
+                location_id=village_event.location_id,
+                significance=village_event.significance,
+            )
 
     def _record_event(
         self,
