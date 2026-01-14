@@ -17,6 +17,7 @@ class PollCreate(PollBase):
     closes_at: int | None = None
     category: str | None = None
     tags: list[str] = []
+    allow_multiple: bool = False
 
 
 class PollResponse(BaseModel):
@@ -34,6 +35,7 @@ class PollResponse(BaseModel):
     closes_at: int | None
     category: str | None
     tags: list[str]
+    allow_multiple: bool
 
 
 class VoteRequest(BaseModel):
@@ -41,3 +43,10 @@ class VoteRequest(BaseModel):
 
     poll_id: int
     option_index: int
+
+
+class MultiVoteRequest(BaseModel):
+    """Schema for submitting multiple votes."""
+
+    poll_id: int
+    option_indices: list[int]

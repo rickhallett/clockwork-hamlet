@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from hamlet.api.deps import get_db
 from hamlet.db import Agent, Poll
-from hamlet.schemas.poll import PollCreate, PollResponse
+from hamlet.schemas.poll import MultiVoteRequest, PollCreate, PollResponse
 from hamlet.simulation.polls import (
     decide_vote,
     get_voting_summary,
@@ -97,7 +97,7 @@ async def get_poll(poll_id: int, db: Session = Depends(get_db)):
 
 @router.post("/vote")
 async def submit_vote(vote: VoteRequest, db: Session = Depends(get_db)):
-    """Submit a vote for a poll option."""
+    """Submit a vote for a poll option (single choice)."""
     poll = db.query(Poll).filter(Poll.id == vote.poll_id).first()
 
     if not poll:
@@ -124,6 +124,62 @@ async def submit_vote(vote: VoteRequest, db: Session = Depends(get_db)):
         "option": vote.option,
         "option_text": options[vote.option],
         "new_count": votes[option_key],
+    }
+
+
+@router.post("/vote-multiple")
+async def submit_multiple_votes(vote: MultiVoteRequest, db: Session = Depends(get_db)):
+    """Submit votes for multiple poll options.
+
+    Only works for polls with allow_multiple=True.
+    """
+    poll = db.query(Poll).filter(Poll.id == vote.poll_id).first()
+
+    if not poll:
+        raise HTTPException(status_code=404, detail=f"Poll {vote.poll_id} not found")
+
+    if poll.status != "active":
+        raise HTTPException(status_code=400, detail="Poll is not active")
+
+    if not poll.allow_multiple:
+        raise HTTPException(
+            status_code=400,
+            detail="This poll does not allow multiple selections. Use /vote endpoint instead.",
+        )
+
+    if not vote.option_indices:
+        raise HTTPException(status_code=400, detail="Must select at least one option")
+
+    options = poll.options_list
+    # Validate all option indices
+    for idx in vote.option_indices:
+        if idx < 0 or idx >= len(options):
+            raise HTTPException(status_code=400, detail=f"Invalid option {idx}. Must be 0-{len(options) - 1}")
+
+    # Check for duplicates
+    if len(vote.option_indices) != len(set(vote.option_indices)):
+        raise HTTPException(status_code=400, detail="Duplicate options not allowed")
+
+    # Update vote counts for all selected options
+    votes = poll.votes_dict
+    updated = []
+    for idx in vote.option_indices:
+        option_key = str(idx)
+        votes[option_key] = votes.get(option_key, 0) + 1
+        updated.append({
+            "option": idx,
+            "option_text": options[idx],
+            "new_count": votes[option_key],
+        })
+    poll.votes_dict = votes
+
+    db.commit()
+
+    return {
+        "success": True,
+        "poll_id": poll.id,
+        "votes_cast": len(vote.option_indices),
+        "options": updated,
     }
 
 
@@ -172,6 +228,7 @@ async def create_poll(poll_data: PollCreate, db: Session = Depends(get_db)):
         created_at=now,
         opens_at=poll_data.opens_at,
         closes_at=poll_data.closes_at,
+        allow_multiple=poll_data.allow_multiple,
         category=poll_data.category,
         status=status,
     )
@@ -305,4 +362,5 @@ def _poll_to_response(poll: Poll) -> PollResponse:
         closes_at=poll.closes_at,
         category=poll.category,
         tags=poll.tags_list,
+        allow_multiple=poll.allow_multiple,
     )
