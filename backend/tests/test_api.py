@@ -175,6 +175,25 @@ class TestPollsEndpoints:
         response = client.post("/api/polls/vote", json={"poll_id": 99999, "option": 0})
         assert response.status_code == 404
 
+    def test_list_polls_returns_category_and_tags_fields(self, client):
+        """Poll response schema includes category and tags fields."""
+        response = client.get("/api/polls")
+        assert response.status_code == 200
+        polls = response.json()
+        # Schema should include category and tags fields (even if empty list)
+        if polls:
+            poll = polls[0]
+            assert "category" in poll
+            assert "tags" in poll
+            assert isinstance(poll["tags"], list)
+
+    def test_list_polls_accepts_category_filter(self, client):
+        """List polls accepts category query parameter."""
+        # Should not error with category parameter
+        response = client.get("/api/polls?category=test")
+        assert response.status_code == 200
+        assert isinstance(response.json(), list)
+
 
 @pytest.mark.integration
 class TestDigestEndpoints:

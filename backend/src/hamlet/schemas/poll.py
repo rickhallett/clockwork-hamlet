@@ -14,6 +14,8 @@ class PollCreate(PollBase):
     """Schema for creating a poll."""
 
     closes_at: int | None = None
+    category: str | None = None
+    tags: list[str] = []
 
 
 class PollResponse(BaseModel):
@@ -28,6 +30,8 @@ class PollResponse(BaseModel):
     status: str
     created_at: int
     closes_at: int | None
+    category: str | None
+    tags: list[str]
 
 
 class VoteRequest(BaseModel):
