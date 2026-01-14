@@ -70,16 +70,14 @@ async def event_generator(
                 if agent_id and agent_id not in event.actors:
                     continue
 
-                # Yield the event
+                # Yield the event (using 'message' event type for browser EventSource.onmessage compatibility)
                 yield {
-                    "event": event.type.value,
                     "data": json.dumps(event_to_dict(event)),
                 }
 
             except TimeoutError:
-                # Send heartbeat to keep connection alive
+                # Send heartbeat to keep connection alive (no event name for onmessage compatibility)
                 yield {
-                    "event": "heartbeat",
                     "data": json.dumps({"type": "heartbeat"}),
                 }
 

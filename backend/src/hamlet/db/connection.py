@@ -8,7 +8,14 @@ from sqlalchemy.orm import Session, sessionmaker
 from hamlet.config import settings
 
 # SQLite connection string
-DATABASE_URL = f"sqlite:///{settings.database_url.replace('file:', '')}"
+# Handle different DATABASE_URL formats:
+# - "file:hamlet.db" -> "sqlite:///hamlet.db"
+# - "sqlite:///path/to/db" -> used as-is
+if settings.database_url.startswith("sqlite://"):
+    DATABASE_URL = settings.database_url
+else:
+    # Legacy format with "file:" prefix
+    DATABASE_URL = f"sqlite:///{settings.database_url.replace('file:', '')}"
 
 engine = create_engine(
     DATABASE_URL,
