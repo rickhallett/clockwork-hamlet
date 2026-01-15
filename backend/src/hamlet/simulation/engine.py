@@ -4,6 +4,9 @@ import asyncio
 import logging
 import random
 import time
+from collections import deque
+from dataclasses import dataclass, field
+from threading import Lock
 
 from hamlet.config import settings
 from hamlet.db import Agent, Event
@@ -15,13 +18,83 @@ from hamlet.simulation.dramatic import (
     process_conflict_aftermath,
     process_romance_aftermath,
 )
-from hamlet.simulation.events import EventType, event_bus
+from hamlet.simulation.events import EventType, SimulationEvent, event_bus
 from hamlet.simulation.greetings import generate_arrival_comment
 from hamlet.simulation.idle import IdleBehavior, get_idle_behavior
 from hamlet.simulation.narratives import EmergentNarratives
 from hamlet.simulation.world import AgentPerception, World
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class HealthMetrics:
+    """Real-time health metrics for the simulation (DASH-14)."""
+
+    start_time: float = field(default_factory=time.time)
+    total_ticks: int = 0
+    error_count: int = 0
+    last_tick_duration_ms: float = 0.0
+    tick_durations: deque = field(default_factory=lambda: deque(maxlen=60))  # Last 60 ticks
+    agents_processed: int = 0
+    queue_depth: int = 0  # Pending agents waiting
+
+    def record_tick(self, duration_ms: float, agents_processed: int) -> None:
+        """Record a completed tick."""
+        self.total_ticks += 1
+        self.last_tick_duration_ms = duration_ms
+        self.tick_durations.append(duration_ms)
+        self.agents_processed = agents_processed
+
+    def record_error(self) -> None:
+        """Record an error."""
+        self.error_count += 1
+
+    @property
+    def avg_tick_duration_ms(self) -> float:
+        """Average tick duration over recent ticks."""
+        if not self.tick_durations:
+            return 0.0
+        return sum(self.tick_durations) / len(self.tick_durations)
+
+    @property
+    def uptime_seconds(self) -> float:
+        """Time since simulation started."""
+        return time.time() - self.start_time
+
+    @property
+    def ticks_per_minute(self) -> float:
+        """Estimated tick rate per minute."""
+        if self.uptime_seconds < 1:
+            return 0.0
+        return (self.total_ticks / self.uptime_seconds) * 60
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary for API response."""
+        return {
+            "uptime_seconds": round(self.uptime_seconds, 1),
+            "total_ticks": self.total_ticks,
+            "ticks_per_minute": round(self.ticks_per_minute, 2),
+            "error_count": self.error_count,
+            "last_tick_duration_ms": round(self.last_tick_duration_ms, 1),
+            "avg_tick_duration_ms": round(self.avg_tick_duration_ms, 1),
+            "agents_processed": self.agents_processed,
+            "queue_depth": self.queue_depth,
+        }
+
+
+# Global health metrics instance (accessible from API)
+_health_metrics: HealthMetrics | None = None
+_health_lock = Lock()
+
+
+def get_health_metrics() -> HealthMetrics:
+    """Get the global health metrics instance."""
+    global _health_metrics
+    with _health_lock:
+        if _health_metrics is None:
+            _health_metrics = HealthMetrics()
+        return _health_metrics
 
 
 def format_object_name(obj_id: str) -> str:
@@ -37,6 +110,7 @@ class SimulationEngine:
         self.running = False
         self.world = World(event_bus)
         self._task: asyncio.Task | None = None
+        self.health = get_health_metrics()  # DASH-14: Health metrics tracking
 
         # Initialize emergent narratives system
         self.narratives = EmergentNarratives(self.world.db)
@@ -88,6 +162,8 @@ class SimulationEngine:
 
     async def tick(self) -> None:
         """Execute a single simulation tick."""
+        tick_start = time.time()
+
         # 1. Advance world time
         tick, day, hour = self.world.advance_time(minutes=30)
         logger.info(f"[Tick {tick}] Day {day}, {hour:.1f}:00")
@@ -127,9 +203,11 @@ class SimulationEngine:
 
         # 5. Process active agents (not sleeping)
         active_agents = [a for a in agents if a.state != "sleeping"]
+        self.health.queue_depth = len(active_agents)  # Track queue depth
 
         for agent in active_agents:
             await self._process_agent(agent)
+            self.health.queue_depth -= 1  # Decrement as we process
 
         # 6. Process emergent narratives (life events, arcs, factions)
         await self.narratives.process_tick(tick, day, hour)
@@ -137,13 +215,60 @@ class SimulationEngine:
         # 7. Commit all changes
         self.world.commit()
 
-        # 8. Log agent states
+        # 8. Record tick metrics (DASH-14)
+        tick_duration_ms = (time.time() - tick_start) * 1000
+        self.health.record_tick(tick_duration_ms, len(active_agents))
+
+        # 9. Publish position updates (DASH-12) - within 1 tick of state change
+        await self._publish_positions(agents, tick, day, hour)
+
+        # 10. Publish health update (DASH-14)
+        await self._publish_health(tick)
+
+        # 11. Log agent states
         for agent in agents:
             logger.debug(
                 f"  {agent.name}: hunger={agent.hunger:.1f}, "
                 f"energy={agent.energy:.1f}, social={agent.social:.1f}, "
                 f"state={agent.state}"
             )
+
+    async def _publish_positions(
+        self, agents: list[Agent], tick: int, day: int, hour: float
+    ) -> None:
+        """Publish agent position updates via SSE (DASH-12)."""
+        positions = [
+            {
+                "id": agent.id,
+                "name": agent.name,
+                "location_id": agent.location_id,
+                "state": agent.state,
+            }
+            for agent in agents
+        ]
+
+        event = SimulationEvent(
+            type=EventType.POSITIONS,
+            summary=f"Agent positions at tick {tick}",
+            timestamp=int(time.time()),
+            data={
+                "tick": tick,
+                "day": day,
+                "hour": hour,
+                "positions": positions,
+            },
+        )
+        await event_bus.publish(event)
+
+    async def _publish_health(self, tick: int) -> None:
+        """Publish simulation health metrics via SSE (DASH-14)."""
+        event = SimulationEvent(
+            type=EventType.HEALTH,
+            summary=f"Health metrics at tick {tick}",
+            timestamp=int(time.time()),
+            data=self.health.to_dict(),
+        )
+        await event_bus.publish(event)
 
     async def _process_agent(self, agent: Agent) -> None:
         """Process a single agent's turn."""
@@ -179,6 +304,7 @@ class SimulationEngine:
 
         except Exception as e:
             logger.error(f"LLM decision failed for {agent.name}: {e}")
+            self.health.record_error()  # DASH-14: Track errors
             # Fall back to random action on LLM failure
             await self._process_agent_random(agent)
 

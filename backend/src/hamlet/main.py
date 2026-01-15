@@ -12,6 +12,7 @@ from hamlet.api import (
     agents_router,
     auth_router,
     chat_router,
+    dashboard_router,
     digest_router,
     events_router,
     factions_router,
@@ -173,6 +174,7 @@ app.include_router(stats_router)
 app.include_router(factions_router)
 app.include_router(life_events_router)
 app.include_router(narrative_arcs_router)
+app.include_router(dashboard_router)
 
 
 @app.get("/")

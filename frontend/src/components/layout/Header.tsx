@@ -147,6 +147,7 @@ export function Header() {
               <NavLink to="/relationships">Relationships</NavLink>
               <NavLink to="/map">Map</NavLink>
               <NavLink to="/digest">Digest</NavLink>
+              <NavLink to="/dashboard">Dashboard</NavLink>
             </nav>
 
             {/* User / Auth section */}
