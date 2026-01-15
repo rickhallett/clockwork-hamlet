@@ -18,6 +18,7 @@ from hamlet.simulation.dramatic import (
 from hamlet.simulation.events import EventType, event_bus
 from hamlet.simulation.greetings import generate_arrival_comment
 from hamlet.simulation.idle import IdleBehavior, get_idle_behavior
+from hamlet.simulation.narratives import EmergentNarratives
 from hamlet.simulation.world import AgentPerception, World
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,9 @@ class SimulationEngine:
         self.running = False
         self.world = World(event_bus)
         self._task: asyncio.Task | None = None
+
+        # Initialize emergent narratives system
+        self.narratives = EmergentNarratives(self.world.db)
 
         # Use LLM if API key is configured, unless explicitly disabled
         if use_llm is None:
@@ -127,8 +131,8 @@ class SimulationEngine:
         for agent in active_agents:
             await self._process_agent(agent)
 
-        # 6. Check for village-wide dramatic events (LIFE-29)
-        await self._check_village_events(agents, hour, day)
+        # 6. Process emergent narratives (life events, arcs, factions)
+        await self.narratives.process_tick(tick, day, hour)
 
         # 7. Commit all changes
         self.world.commit()
@@ -554,6 +558,14 @@ class SimulationEngine:
             significance=significance,
         )
         self.world.db.add(event)
+
+    def get_narrative_context(self, agent_id: str) -> str:
+        """Get narrative context for an agent (for LLM prompts)."""
+        return self.narratives.get_agent_narrative_context(agent_id)
+
+    def get_story_digest(self) -> dict:
+        """Get a story digest of current narrative activity."""
+        return self.narratives.generate_story_digest()
 
 
 async def run_simulation(num_ticks: int = 10, tick_interval: float = 0.1) -> None:

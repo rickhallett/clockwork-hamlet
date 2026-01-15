@@ -13,6 +13,9 @@ def build_agent_context(agent: Agent, world: World) -> str:
     goals = format_goals(agent, world)
     needs = format_needs(agent)
 
+    # Get emergent narrative context
+    narrative_context = get_narrative_context(agent, world)
+
     context = f"""You are {agent.name}. {agent.personality_prompt or ""}
 
 PERSONALITY TRAITS (1-10 scale):
@@ -36,7 +39,7 @@ RECENT MEMORIES:
 
 CURRENT GOALS:
 {goals}
-"""
+{narrative_context}"""
     return context.strip()
 
 
@@ -603,3 +606,222 @@ How do you react to this? Consider:
 Describe your reaction in 1-2 sentences from first person perspective:
 """
     return prompt
+
+
+def get_narrative_context(agent: Agent, world: World) -> str:
+    """Get emergent narrative context for an agent.
+
+    This includes:
+    - Active narrative arcs the agent is part of
+    - Faction memberships and their goals
+    - Significant life events (marriage, rivalries, mentorship)
+    - Long-term ambitions and plans
+
+    Args:
+        agent: The agent to get context for
+        world: The world containing the database
+
+    Returns:
+        A formatted string of narrative context, or empty string if none
+    """
+    context_parts = []
+
+    # Get faction context
+    faction_ctx = get_faction_context(agent, world)
+    if faction_ctx:
+        context_parts.append(faction_ctx)
+
+    # Get life events context
+    life_event_ctx = get_life_event_context(agent, world)
+    if life_event_ctx:
+        context_parts.append(life_event_ctx)
+
+    # Get narrative arc context
+    arc_ctx = get_arc_context(agent, world)
+    if arc_ctx:
+        context_parts.append(arc_ctx)
+
+    # Get long-term plan context
+    plan_ctx = get_plan_context(agent, world)
+    if plan_ctx:
+        context_parts.append(plan_ctx)
+
+    if not context_parts:
+        return ""
+
+    return "\n\n" + "\n\n".join(context_parts)
+
+
+def get_faction_context(agent: Agent, world: World) -> str | None:
+    """Get faction membership context for an agent."""
+    from hamlet.db.models import Faction, FactionMembership
+
+    db = world.db
+
+    memberships = (
+        db.query(FactionMembership)
+        .filter(
+            FactionMembership.agent_id == agent.id,
+            FactionMembership.left_at.is_(None),
+        )
+        .all()
+    )
+
+    if not memberships:
+        return None
+
+    lines = ["YOUR FACTIONS:"]
+    for membership in memberships:
+        faction = db.query(Faction).filter(Faction.id == membership.faction_id).first()
+        if faction:
+            goals_str = ", ".join(faction.goals_list[:2]) if faction.goals_list else "none specified"
+            lines.append(
+                f"  - {faction.name} ({membership.role}): {faction.description or 'A local group'}. "
+                f"Goals: {goals_str}. Loyalty: {membership.loyalty}%"
+            )
+
+    return "\n".join(lines) if len(lines) > 1 else None
+
+
+def get_life_event_context(agent: Agent, world: World) -> str | None:
+    """Get active life events context for an agent."""
+    from hamlet.db.models import LifeEvent
+    from hamlet.life_events.types import LifeEventStatus, LifeEventType
+
+    db = world.db
+
+    events = (
+        db.query(LifeEvent)
+        .filter(
+            LifeEvent.status == LifeEventStatus.ACTIVE.value,
+            (LifeEvent.primary_agent_id == agent.id)
+            | (LifeEvent.secondary_agent_id == agent.id),
+        )
+        .all()
+    )
+
+    if not events:
+        return None
+
+    lines = ["YOUR LIFE SITUATIONS:"]
+    for event in events:
+        other_agent = None
+        if event.primary_agent_id == agent.id and event.secondary_agent_id:
+            other = db.query(Agent).filter(Agent.id == event.secondary_agent_id).first()
+            other_agent = other.name if other else event.secondary_agent_id
+        elif event.secondary_agent_id == agent.id:
+            other = db.query(Agent).filter(Agent.id == event.primary_agent_id).first()
+            other_agent = other.name if other else event.primary_agent_id
+
+        event_type = event.type
+        if event_type == LifeEventType.MARRIAGE.value and other_agent:
+            lines.append(f"  - You are married to {other_agent}")
+        elif event_type == LifeEventType.MENTORSHIP.value:
+            if event.primary_agent_id == agent.id:
+                lines.append(f"  - You are mentoring {other_agent}")
+            else:
+                lines.append(f"  - You are being mentored by {other_agent}")
+        elif event_type == LifeEventType.RIVALRY.value and other_agent:
+            lines.append(f"  - You have an ongoing rivalry with {other_agent} (you're competing)")
+        elif event_type == LifeEventType.FEUD.value and other_agent:
+            lines.append(f"  - You are in a bitter feud with {other_agent} (deep animosity)")
+        elif event_type == LifeEventType.FRIENDSHIP.value and other_agent:
+            lines.append(f"  - You have a deep friendship with {other_agent}")
+        else:
+            lines.append(f"  - {event.description}")
+
+    return "\n".join(lines) if len(lines) > 1 else None
+
+
+def get_arc_context(agent: Agent, world: World) -> str | None:
+    """Get narrative arc context for an agent."""
+    from hamlet.db.models import NarrativeArc
+    from hamlet.narrative_arcs.types import ACT_NAMES, ArcStatus, ArcType
+
+    db = world.db
+
+    arcs = (
+        db.query(NarrativeArc)
+        .filter(
+            NarrativeArc.status.notin_([ArcStatus.RESOLUTION.value, ArcStatus.ABANDONED.value]),
+            (NarrativeArc.primary_agent_id == agent.id)
+            | (NarrativeArc.secondary_agent_id == agent.id),
+        )
+        .order_by(NarrativeArc.significance.desc())
+        .limit(3)
+        .all()
+    )
+
+    if not arcs:
+        return None
+
+    lines = ["YOUR ONGOING STORIES (you're part of these narratives):"]
+    for arc in arcs:
+        act_name = ACT_NAMES.get(arc.current_act, "unfolding")
+
+        # Determine role
+        if arc.primary_agent_id == agent.id:
+            role = "protagonist"
+        else:
+            role = "co-protagonist"
+
+        # Get other agent name if exists
+        other_name = None
+        if arc.secondary_agent_id and arc.secondary_agent_id != agent.id:
+            other = db.query(Agent).filter(Agent.id == arc.secondary_agent_id).first()
+            other_name = other.name if other else None
+        elif arc.primary_agent_id != agent.id:
+            other = db.query(Agent).filter(Agent.id == arc.primary_agent_id).first()
+            other_name = other.name if other else None
+
+        arc_desc = f"  - {arc.title or arc.type} ({role}): Currently in '{act_name}' phase."
+        if arc.theme:
+            arc_desc += f" Theme: {arc.theme}"
+        if other_name:
+            arc_desc += f" With: {other_name}"
+
+        lines.append(arc_desc)
+
+        # Add dramatic hints based on arc phase
+        if arc.status == ArcStatus.CLIMAX.value:
+            lines.append("    [This is a critical moment - your choices now matter greatly!]")
+        elif arc.status == ArcStatus.RISING_ACTION.value:
+            lines.append("    [Tensions are building - events are leading toward something significant]")
+
+    return "\n".join(lines) if len(lines) > 1 else None
+
+
+def get_plan_context(agent: Agent, world: World) -> str | None:
+    """Get long-term plan/ambition context for an agent."""
+    from hamlet.db.models import GoalPlan
+    from hamlet.goals.types import PlanStatus
+
+    db = world.db
+
+    plan = (
+        db.query(GoalPlan)
+        .filter(
+            GoalPlan.agent_id == agent.id,
+            GoalPlan.status.in_([PlanStatus.ACTIVE.value, PlanStatus.PLANNING.value]),
+        )
+        .first()
+    )
+
+    if not plan:
+        return None
+
+    milestones = plan.milestones_list
+    current_milestone = None
+    for m in milestones:
+        if m.get("status") == "pending":
+            current_milestone = m
+            break
+
+    lines = ["YOUR LONG-TERM AMBITION:"]
+    lines.append(f"  Goal: {plan.description}")
+    lines.append(f"  Progress: {plan.progress:.0f}%")
+
+    if current_milestone:
+        lines.append(f"  Current focus: {current_milestone.get('description', 'Continue working')}")
+
+    return "\n".join(lines)

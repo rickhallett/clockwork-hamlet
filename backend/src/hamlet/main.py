@@ -14,9 +14,12 @@ from hamlet.api import (
     chat_router,
     digest_router,
     events_router,
+    factions_router,
     goals_router,
+    life_events_router,
     llm_router,
     locations_router,
+    narrative_arcs_router,
     polls_router,
     relationships_router,
     stats_router,
@@ -167,6 +170,9 @@ app.include_router(digest_router)
 app.include_router(stream_router)
 app.include_router(llm_router)
 app.include_router(stats_router)
+app.include_router(factions_router)
+app.include_router(life_events_router)
+app.include_router(narrative_arcs_router)
 
 
 @app.get("/")

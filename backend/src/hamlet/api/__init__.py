@@ -5,9 +5,12 @@ from hamlet.api.auth import router as auth_router
 from hamlet.api.chat import router as chat_router
 from hamlet.api.digest import router as digest_router
 from hamlet.api.events import router as events_router
+from hamlet.api.factions import router as factions_router
 from hamlet.api.goals import router as goals_router
+from hamlet.api.life_events import router as life_events_router
 from hamlet.api.llm import router as llm_router
 from hamlet.api.locations import router as locations_router
+from hamlet.api.narrative_arcs import router as narrative_arcs_router
 from hamlet.api.polls import router as polls_router
 from hamlet.api.relationships import router as relationships_router
 from hamlet.api.stats import router as stats_router
@@ -20,9 +23,12 @@ __all__ = [
     "chat_router",
     "digest_router",
     "events_router",
+    "factions_router",
     "goals_router",
+    "life_events_router",
     "llm_router",
     "locations_router",
+    "narrative_arcs_router",
     "polls_router",
     "relationships_router",
     "stats_router",

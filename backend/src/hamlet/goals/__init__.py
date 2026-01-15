@@ -7,18 +7,23 @@ from hamlet.goals.manager import (
     get_active_goals,
     prioritize_goals,
 )
+from hamlet.goals.planning import GoalPlanner
 from hamlet.goals.types import (
     DESIRES,
     NEEDS,
     REACTIVE,
+    AmbitionType,
     GoalCategory,
     GoalType,
+    PlanStatus,
 )
 
 __all__ = [
     # Types
     "GoalType",
     "GoalCategory",
+    "AmbitionType",
+    "PlanStatus",
     "NEEDS",
     "DESIRES",
     "REACTIVE",
@@ -27,6 +32,7 @@ __all__ = [
     "generate_reactive_goal",
     # Management
     "GoalManager",
+    "GoalPlanner",
     "get_active_goals",
     "prioritize_goals",
     "check_goal_completion",
