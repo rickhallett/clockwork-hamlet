@@ -170,3 +170,57 @@ class TestStreamEndpoint:
         assert "types" in param_names
         assert "location" in param_names
         assert "agent" in param_names
+
+
+@pytest.mark.slow
+class TestStreamPerformance:
+    """Performance tests for SSE streaming endpoints."""
+
+    def test_stream_history_under_50ms(self, client):
+        """Stream history should respond in under 50ms."""
+        start = time.time()
+        response = client.get("/api/stream/history?limit=100")
+        duration = time.time() - start
+
+        assert response.status_code == 200
+        assert duration < 0.05, f"Stream history took {duration:.3f}s (expected < 0.05s)"
+
+    def test_stream_history_large_limit_under_100ms(self, client):
+        """Stream history with large limit should respond in under 100ms."""
+        start = time.time()
+        response = client.get("/api/stream/history?limit=200")
+        duration = time.time() - start
+
+        assert response.status_code == 200
+        assert duration < 0.1, f"Stream history (200) took {duration:.3f}s (expected < 0.1s)"
+
+    @pytest.mark.asyncio
+    async def test_event_bus_publish_under_5ms(self):
+        """Publishing events should complete in under 5ms."""
+        queue = event_bus.subscribe()
+
+        try:
+            event = SimulationEvent(
+                type=EventType.ACTION,
+                summary="Performance test event",
+                timestamp=int(time.time()),
+                actors=["test"],
+            )
+
+            start = time.time()
+            await event_bus.publish(event)
+            duration = time.time() - start
+
+            assert duration < 0.005, f"Event publish took {duration:.4f}s (expected < 0.005s)"
+        finally:
+            event_bus.unsubscribe(queue)
+
+    @pytest.mark.asyncio
+    async def test_event_bus_subscribe_under_1ms(self):
+        """Subscribing to event bus should complete in under 1ms."""
+        start = time.time()
+        queue = event_bus.subscribe()
+        duration = time.time() - start
+
+        assert duration < 0.001, f"Subscribe took {duration:.4f}s (expected < 0.001s)"
+        event_bus.unsubscribe(queue)
