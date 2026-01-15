@@ -95,6 +95,11 @@ class Agent(Base):
     energy = Column(Float, default=10.0)
     social = Column(Float, default=5.0)
 
+    # User-created agent tracking
+    creator_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(Float, nullable=True)  # Unix timestamp
+    is_user_created = Column(Boolean, default=False)
+
     # Relationships
     location = relationship("Location", back_populates="agents")
     memories = relationship("Memory", back_populates="agent", cascade="all, delete-orphan")
@@ -113,6 +118,7 @@ class Agent(Base):
     chat_conversations = relationship(
         "ChatConversation", back_populates="agent", cascade="all, delete-orphan"
     )
+    creator = relationship("User", back_populates="created_agents")
 
     @property
     def traits_dict(self) -> dict:
@@ -330,6 +336,9 @@ class User(Base):
     chat_conversations = relationship(
         "ChatConversation", back_populates="user", cascade="all, delete-orphan"
     )
+    created_agents = relationship(
+        "Agent", back_populates="creator", foreign_keys="Agent.creator_id"
+    )
 
     @property
     def preferences_dict(self) -> dict:
@@ -338,6 +347,22 @@ class User(Base):
     @preferences_dict.setter
     def preferences_dict(self, value: dict):
         self.preferences = json_serializer(value)
+
+
+class UserAgentQuota(Base):
+    """Track agent creation quotas per user."""
+
+    __tablename__ = "user_agent_quotas"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True)
+    max_agents = Column(Integer, default=3)  # Maximum agents user can create
+    agents_created = Column(Integer, default=0)  # Current count of created agents
+    last_creation_at = Column(Float)  # Unix timestamp of last agent creation
+    rate_limit_window = Column(Integer, default=3600)  # Seconds between creations (1 hour)
+
+    # Relationships
+    user = relationship("User")
 
 
 class RefreshToken(Base):
