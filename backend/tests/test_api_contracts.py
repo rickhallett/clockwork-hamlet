@@ -264,6 +264,160 @@ class TestPollAPIContract:
         assert response.status_code == 200
         # May be null or a poll object
 
+    def test_poll_response_full_schema(self, client):
+        """Poll response includes all required fields."""
+        # Create a poll to ensure we have one
+        create_resp = client.post(
+            "/api/polls",
+            json={
+                "question": "Schema test poll",
+                "options": ["Option A", "Option B", "Option C"],
+                "category": "test",
+                "tags": ["schema", "test"],
+            },
+        )
+        assert create_resp.status_code == 201
+        poll = create_resp.json()
+
+        # Required fields
+        assert "id" in poll
+        assert "question" in poll
+        assert "options" in poll
+        assert "votes" in poll
+        assert "status" in poll
+        assert "created_at" in poll
+        assert "category" in poll
+        assert "tags" in poll
+        assert "allow_multiple" in poll
+
+        # Types
+        assert isinstance(poll["id"], int)
+        assert isinstance(poll["question"], str)
+        assert isinstance(poll["options"], list)
+        assert isinstance(poll["votes"], dict)
+        assert isinstance(poll["status"], str)
+        assert isinstance(poll["created_at"], int)
+        assert isinstance(poll["tags"], list)
+        assert isinstance(poll["allow_multiple"], bool)
+
+        # Optional fields may be present
+        assert "opens_at" in poll  # May be None
+        assert "closes_at" in poll  # May be None
+
+
+@pytest.mark.unit
+class TestAgentVotingAPIContract:
+    """Test agent voting API response shapes match schemas."""
+
+    def test_agent_vote_response_schema(self, client):
+        """Agent vote endpoint returns valid schema."""
+        # Create a poll
+        poll_resp = client.post(
+            "/api/polls",
+            json={
+                "question": "Agent vote schema test",
+                "options": ["Yes", "No", "Maybe"],
+                "category": "test",
+            },
+        )
+        poll_id = poll_resp.json()["id"]
+
+        # Have an agent vote
+        response = client.post(
+            f"/api/polls/{poll_id}/agent-vote",
+            json={"agent_id": "agnes"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+
+        # Required fields
+        assert "agent_id" in data
+        assert "poll_id" in data
+        assert "option_index" in data
+        assert "option_text" in data
+        assert "confidence" in data
+
+        # Types
+        assert isinstance(data["agent_id"], str)
+        assert isinstance(data["poll_id"], int)
+        assert isinstance(data["option_index"], int)
+        assert isinstance(data["option_text"], str)
+        assert isinstance(data["confidence"], float)
+
+        # Value constraints
+        assert 0 <= data["option_index"] <= 2
+        assert 0 <= data["confidence"] <= 1
+
+    def test_bulk_agent_voting_response_schema(self, client):
+        """Bulk agent voting endpoint returns valid schema."""
+        # Create a poll
+        poll_resp = client.post(
+            "/api/polls",
+            json={
+                "question": "Bulk vote schema test",
+                "options": ["Choice A", "Choice B"],
+            },
+        )
+        poll_id = poll_resp.json()["id"]
+
+        # Trigger bulk voting
+        response = client.post(f"/api/polls/{poll_id}/agent-voting")
+        assert response.status_code == 200
+        data = response.json()
+
+        # Required fields
+        assert "poll_id" in data
+        assert "total_votes" in data
+        assert "votes" in data
+        assert "summary" in data
+
+        # Types
+        assert isinstance(data["poll_id"], int)
+        assert isinstance(data["total_votes"], int)
+        assert isinstance(data["votes"], list)
+        assert isinstance(data["summary"], dict)
+
+        # Votes list schema
+        assert len(data["votes"]) == data["total_votes"]
+        for vote in data["votes"]:
+            assert "agent_id" in vote
+            assert "poll_id" in vote
+            assert "option_index" in vote
+            assert "option_text" in vote
+            assert "confidence" in vote
+            assert isinstance(vote["agent_id"], str)
+            assert isinstance(vote["confidence"], float)
+
+    def test_bulk_voting_summary_schema(self, client):
+        """Bulk voting summary has correct schema."""
+        # Create a poll
+        poll_resp = client.post(
+            "/api/polls",
+            json={
+                "question": "Summary schema test",
+                "options": ["A", "B", "C"],
+            },
+        )
+        poll_id = poll_resp.json()["id"]
+
+        response = client.post(f"/api/polls/{poll_id}/agent-voting")
+        summary = response.json()["summary"]
+
+        # Required summary fields
+        assert "total_votes" in summary
+        assert "option_counts" in summary
+        assert "avg_confidence" in summary
+
+        # Types
+        assert isinstance(summary["total_votes"], int)
+        assert isinstance(summary["option_counts"], dict)
+        assert isinstance(summary["avg_confidence"], float)
+
+        # If there's a winner
+        if summary["total_votes"] > 0:
+            assert "winning_option" in summary
+            assert isinstance(summary["winning_option"], str)
+
 
 @pytest.mark.unit
 class TestHealthAPIContract:

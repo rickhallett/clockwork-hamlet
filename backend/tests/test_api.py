@@ -365,6 +365,223 @@ class TestPollsEndpoints:
         assert "polls_opened" in data
         assert "polls_closed" in data
 
+    def test_get_poll_by_id(self, client):
+        """Can get a specific poll by ID."""
+        # Create a poll first
+        create_resp = client.post(
+            "/api/polls",
+            json={
+                "question": "Test poll for get by ID",
+                "options": ["Option A", "Option B"],
+            },
+        )
+        assert create_resp.status_code == 201
+        poll_id = create_resp.json()["id"]
+
+        # Get the poll by ID
+        response = client.get(f"/api/polls/{poll_id}")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == poll_id
+        assert data["question"] == "Test poll for get by ID"
+
+    def test_get_poll_by_id_not_found(self, client):
+        """Get poll returns 404 for non-existent ID."""
+        response = client.get("/api/polls/99999")
+        assert response.status_code == 404
+        assert "not found" in response.json()["detail"]
+
+
+@pytest.mark.integration
+class TestAgentVotingEndpoints:
+    """Test agent voting endpoints (POLL-9, POLL-10)."""
+
+    def test_agent_vote_success(self, client):
+        """Agent can vote on a poll based on personality traits."""
+        # Create a poll
+        create_resp = client.post(
+            "/api/polls",
+            json={
+                "question": "Should we explore the mysterious cave?",
+                "options": ["Yes, explore it", "No, too dangerous", "Send scouts first"],
+                "category": "exploration",
+            },
+        )
+        assert create_resp.status_code == 201
+        poll_id = create_resp.json()["id"]
+
+        # Have Agnes vote
+        response = client.post(
+            f"/api/polls/{poll_id}/agent-vote",
+            json={"agent_id": "agnes"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["agent_id"] == "agnes"
+        assert data["poll_id"] == poll_id
+        assert 0 <= data["option_index"] <= 2
+        assert data["option_text"] in [
+            "Yes, explore it",
+            "No, too dangerous",
+            "Send scouts first",
+        ]
+        assert 0 <= data["confidence"] <= 1
+
+    def test_agent_vote_invalid_agent(self, client):
+        """Agent vote fails for non-existent agent."""
+        # Create a poll
+        create_resp = client.post(
+            "/api/polls",
+            json={
+                "question": "Test poll",
+                "options": ["A", "B"],
+            },
+        )
+        poll_id = create_resp.json()["id"]
+
+        response = client.post(
+            f"/api/polls/{poll_id}/agent-vote",
+            json={"agent_id": "nonexistent_agent"},
+        )
+        assert response.status_code == 404
+        assert "not found" in response.json()["detail"]
+
+    def test_agent_vote_invalid_poll(self, client):
+        """Agent vote fails for non-existent poll."""
+        response = client.post(
+            "/api/polls/99999/agent-vote",
+            json={"agent_id": "agnes"},
+        )
+        assert response.status_code == 404
+        assert "not found" in response.json()["detail"]
+
+    def test_agent_vote_inactive_poll(self, client):
+        """Agent vote fails for inactive poll."""
+        import time
+
+        # Create a scheduled poll (not yet active)
+        opens_at = int(time.time()) + 3600
+        create_resp = client.post(
+            "/api/polls",
+            json={
+                "question": "Future poll",
+                "options": ["A", "B"],
+                "opens_at": opens_at,
+            },
+        )
+        poll_id = create_resp.json()["id"]
+
+        response = client.post(
+            f"/api/polls/{poll_id}/agent-vote",
+            json={"agent_id": "agnes"},
+        )
+        assert response.status_code == 400
+        assert "not active" in response.json()["detail"]
+
+    def test_agent_vote_updates_poll_votes(self, client):
+        """Agent vote increments the poll vote count."""
+        # Create a poll
+        create_resp = client.post(
+            "/api/polls",
+            json={
+                "question": "Vote count test",
+                "options": ["A", "B"],
+            },
+        )
+        poll_id = create_resp.json()["id"]
+
+        # Have Agnes vote
+        vote_resp = client.post(
+            f"/api/polls/{poll_id}/agent-vote",
+            json={"agent_id": "agnes"},
+        )
+        assert vote_resp.status_code == 200
+        voted_option = vote_resp.json()["option_index"]
+
+        # Check poll votes updated
+        poll_resp = client.get(f"/api/polls/{poll_id}")
+        votes = poll_resp.json()["votes"]
+        assert votes.get(str(voted_option), 0) >= 1
+
+    def test_bulk_agent_voting_success(self, client):
+        """All agents can vote on a poll at once."""
+        # Create a poll
+        create_resp = client.post(
+            "/api/polls",
+            json={
+                "question": "What should the village do?",
+                "options": ["Build a well", "Plant more crops", "Hold a festival"],
+                "category": "governance",
+            },
+        )
+        assert create_resp.status_code == 201
+        poll_id = create_resp.json()["id"]
+
+        # Trigger bulk voting
+        response = client.post(f"/api/polls/{poll_id}/agent-voting")
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["poll_id"] == poll_id
+        assert data["total_votes"] > 0
+        assert len(data["votes"]) == data["total_votes"]
+        assert "summary" in data
+
+        # Verify each vote has required fields
+        for vote in data["votes"]:
+            assert "agent_id" in vote
+            assert "poll_id" in vote
+            assert "option_index" in vote
+            assert "option_text" in vote
+            assert "confidence" in vote
+
+    def test_bulk_agent_voting_summary(self, client):
+        """Bulk voting returns correct summary statistics."""
+        # Create a poll
+        create_resp = client.post(
+            "/api/polls",
+            json={
+                "question": "Summary test poll",
+                "options": ["Option A", "Option B"],
+            },
+        )
+        poll_id = create_resp.json()["id"]
+
+        response = client.post(f"/api/polls/{poll_id}/agent-voting")
+        data = response.json()
+        summary = data["summary"]
+
+        assert "total_votes" in summary
+        assert "option_counts" in summary
+        assert "avg_confidence" in summary
+        assert summary["total_votes"] == data["total_votes"]
+
+    def test_bulk_agent_voting_invalid_poll(self, client):
+        """Bulk voting fails for non-existent poll."""
+        response = client.post("/api/polls/99999/agent-voting")
+        assert response.status_code == 404
+        assert "not found" in response.json()["detail"]
+
+    def test_bulk_agent_voting_inactive_poll(self, client):
+        """Bulk voting fails for inactive poll."""
+        import time
+
+        # Create a scheduled poll
+        opens_at = int(time.time()) + 3600
+        create_resp = client.post(
+            "/api/polls",
+            json={
+                "question": "Future poll",
+                "options": ["A", "B"],
+                "opens_at": opens_at,
+            },
+        )
+        poll_id = create_resp.json()["id"]
+
+        response = client.post(f"/api/polls/{poll_id}/agent-voting")
+        assert response.status_code == 400
+        assert "not active" in response.json()["detail"]
+
 
 @pytest.mark.integration
 class TestDigestEndpoints:
