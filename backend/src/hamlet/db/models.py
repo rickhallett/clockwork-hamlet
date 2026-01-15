@@ -198,9 +198,12 @@ class Goal(Base):
     target_id = Column(String(50))  # Optional target (agent or object ID)
     status = Column(String(20), default="active")  # active, completed, failed, abandoned
     created_at = Column(Integer, nullable=False)  # Unix timestamp
+    parent_id = Column(Integer, ForeignKey("goals.id"))  # For hierarchical goals
+    plan_id = Column(Integer, ForeignKey("goal_plans.id"))  # Link to long-term plan
 
     # Relationships
     agent = relationship("Agent", back_populates="goals")
+    parent = relationship("Goal", remote_side=[id], backref="subgoals")
 
 
 class Event(Base):
@@ -399,3 +402,231 @@ class ChatMessage(Base):
 
     # Relationships
     conversation = relationship("ChatConversation", back_populates="messages")
+
+
+# ============================================================================
+# EMERGENT NARRATIVES MODELS (LIFE-29 through LIFE-32)
+# ============================================================================
+
+
+class Faction(Base):
+    """A faction or alliance of agents with shared goals."""
+
+    __tablename__ = "factions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(100), nullable=False, unique=True)
+    description = Column(Text)
+    founder_id = Column(String(50), ForeignKey("agents.id"))
+    location_id = Column(String(50), ForeignKey("locations.id"))  # Home base
+    beliefs = Column(Text, default="[]")  # JSON array of core beliefs/values
+    goals = Column(Text, default="[]")  # JSON array of faction goals
+    treasury = Column(Float, default=0.0)  # Faction resources
+    reputation = Column(Integer, default=0)  # -100 to +100
+    status = Column(String(20), default="forming")  # forming, active, disbanded
+    created_at = Column(Float, nullable=False)  # Unix timestamp
+
+    # Relationships
+    founder = relationship("Agent", foreign_keys=[founder_id])
+    location = relationship("Location")
+    memberships = relationship(
+        "FactionMembership", back_populates="faction", cascade="all, delete-orphan"
+    )
+
+    @property
+    def beliefs_list(self) -> list[str]:
+        return json_deserializer(self.beliefs) or []
+
+    @beliefs_list.setter
+    def beliefs_list(self, value: list[str]):
+        self.beliefs = json_serializer(value)
+
+    @property
+    def goals_list(self) -> list[str]:
+        return json_deserializer(self.goals) or []
+
+    @goals_list.setter
+    def goals_list(self, value: list[str]):
+        self.goals = json_serializer(value)
+
+
+class FactionMembership(Base):
+    """Membership of an agent in a faction."""
+
+    __tablename__ = "faction_memberships"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    faction_id = Column(Integer, ForeignKey("factions.id"), nullable=False)
+    agent_id = Column(String(50), ForeignKey("agents.id"), nullable=False)
+    role = Column(String(30), default="member")  # founder, leader, member, outcast
+    loyalty = Column(Integer, default=50)  # 0-100
+    contributions = Column(Float, default=0.0)  # Resources contributed
+    joined_at = Column(Float, nullable=False)  # Unix timestamp
+    left_at = Column(Float)  # Unix timestamp, null if still member
+
+    # Relationships
+    faction = relationship("Faction", back_populates="memberships")
+    agent = relationship("Agent")
+
+    __table_args__ = (
+        UniqueConstraint("faction_id", "agent_id", name="unique_faction_membership"),
+    )
+
+
+class FactionRelationship(Base):
+    """Relationship between two factions."""
+
+    __tablename__ = "faction_relationships"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    faction_1_id = Column(Integer, ForeignKey("factions.id"), nullable=False)
+    faction_2_id = Column(Integer, ForeignKey("factions.id"), nullable=False)
+    type = Column(String(30), default="neutral")  # ally, enemy, neutral, competitor
+    score = Column(Integer, default=0)  # -100 to +100
+    history = Column(Text, default="[]")  # JSON array of diplomatic events
+
+    # Relationships
+    faction_1 = relationship("Faction", foreign_keys=[faction_1_id])
+    faction_2 = relationship("Faction", foreign_keys=[faction_2_id])
+
+    __table_args__ = (
+        UniqueConstraint("faction_1_id", "faction_2_id", name="unique_faction_relationship"),
+    )
+
+    @property
+    def history_list(self) -> list[str]:
+        return json_deserializer(self.history) or []
+
+    @history_list.setter
+    def history_list(self, value: list[str]):
+        self.history = json_serializer(value)
+
+
+class GoalPlan(Base):
+    """A long-term goal plan with multiple milestones (hierarchical goals)."""
+
+    __tablename__ = "goal_plans"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    agent_id = Column(String(50), ForeignKey("agents.id"), nullable=False)
+    type = Column(String(50), nullable=False)  # WEALTH, POWER, ROMANCE, KNOWLEDGE, etc.
+    description = Column(Text, nullable=False)
+    parent_id = Column(Integer, ForeignKey("goal_plans.id"))  # For hierarchical goals
+    milestones = Column(Text, default="[]")  # JSON array of milestone objects
+    dependencies = Column(Text, default="[]")  # JSON array of goal plan IDs
+    progress = Column(Float, default=0.0)  # 0-100 percent
+    target_agent_id = Column(String(50))  # Optional target agent
+    status = Column(String(20), default="planning")  # planning, active, stalled, completed, failed
+    created_at = Column(Float, nullable=False)  # Unix timestamp
+    target_completion = Column(Float)  # Target completion timestamp
+
+    # Relationships
+    agent = relationship("Agent")
+    parent = relationship("GoalPlan", remote_side=[id], backref="children")
+
+    @property
+    def milestones_list(self) -> list[dict]:
+        return json_deserializer(self.milestones) or []
+
+    @milestones_list.setter
+    def milestones_list(self, value: list[dict]):
+        self.milestones = json_serializer(value)
+
+    @property
+    def dependencies_list(self) -> list[int]:
+        return json_deserializer(self.dependencies) or []
+
+    @dependencies_list.setter
+    def dependencies_list(self, value: list[int]):
+        self.dependencies = json_serializer(value)
+
+
+class LifeEvent(Base):
+    """A significant life event (marriage, rivalry, mentorship, etc.)."""
+
+    __tablename__ = "life_events"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    type = Column(String(30), nullable=False)  # MARRIAGE, RIVALRY, MENTORSHIP, BETRAYAL, etc.
+    primary_agent_id = Column(String(50), ForeignKey("agents.id"), nullable=False)
+    secondary_agent_id = Column(String(50), ForeignKey("agents.id"))  # Optional second agent
+    description = Column(Text, nullable=False)
+    significance = Column(Integer, default=7)  # 1-10
+    status = Column(String(20), default="active")  # pending, active, resolved, failed
+    related_agents = Column(Text, default="[]")  # JSON array of other affected agent IDs
+    effects = Column(Text, default="{}")  # JSON dict of effects (relationship changes, etc.)
+    timestamp = Column(Float, nullable=False)  # Unix timestamp
+    resolved_at = Column(Float)  # When the event concluded
+
+    # Relationships
+    primary_agent = relationship("Agent", foreign_keys=[primary_agent_id])
+    secondary_agent = relationship("Agent", foreign_keys=[secondary_agent_id])
+
+    @property
+    def related_agents_list(self) -> list[str]:
+        return json_deserializer(self.related_agents) or []
+
+    @related_agents_list.setter
+    def related_agents_list(self, value: list[str]):
+        self.related_agents = json_serializer(value)
+
+    @property
+    def effects_dict(self) -> dict:
+        return json_deserializer(self.effects) or {}
+
+    @effects_dict.setter
+    def effects_dict(self, value: dict):
+        self.effects = json_serializer(value)
+
+
+class NarrativeArc(Base):
+    """A detected narrative arc involving one or more agents."""
+
+    __tablename__ = "narrative_arcs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    type = Column(String(50), nullable=False)  # LOVE_STORY, RIVALRY, MENTORSHIP, RISE_TO_POWER, etc.
+    title = Column(String(200))  # Optional narrative title
+    primary_agent_id = Column(String(50), ForeignKey("agents.id"), nullable=False)
+    secondary_agent_id = Column(String(50), ForeignKey("agents.id"))  # Optional second protagonist
+    theme = Column(Text)  # What this arc is about
+    acts = Column(Text, default="[]")  # JSON array of act objects
+    current_act = Column(Integer, default=0)  # 0-4: exposition, rising, climax, falling, resolution
+    status = Column(String(20), default="forming")  # forming, rising_action, climax, resolution, complete
+    significance = Column(Integer, default=5)  # 1-10 calculated from events
+    discovered_at = Column(Float, nullable=False)  # Unix timestamp
+    completed_at = Column(Float)  # When arc concluded
+
+    # Relationships
+    primary_agent = relationship("Agent", foreign_keys=[primary_agent_id])
+    secondary_agent = relationship("Agent", foreign_keys=[secondary_agent_id])
+    arc_events = relationship("ArcEvent", back_populates="arc", cascade="all, delete-orphan")
+
+    @property
+    def acts_list(self) -> list[dict]:
+        return json_deserializer(self.acts) or []
+
+    @acts_list.setter
+    def acts_list(self, value: list[dict]):
+        self.acts = json_serializer(value)
+
+
+class ArcEvent(Base):
+    """Junction table linking events to narrative arcs."""
+
+    __tablename__ = "arc_events"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    arc_id = Column(Integer, ForeignKey("narrative_arcs.id"), nullable=False)
+    event_id = Column(Integer, ForeignKey("events.id"), nullable=False)
+    act_number = Column(Integer, default=0)  # Which act this event belongs to
+    is_turning_point = Column(Boolean, default=False)  # Marks significant plot points
+    notes = Column(Text)  # Optional context for this event in the arc
+
+    # Relationships
+    arc = relationship("NarrativeArc", back_populates="arc_events")
+    event = relationship("Event")
+
+    __table_args__ = (
+        UniqueConstraint("arc_id", "event_id", name="unique_arc_event"),
+    )
