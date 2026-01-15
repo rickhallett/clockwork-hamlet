@@ -73,3 +73,94 @@ class TestPerformance:
 
         assert response.status_code == 200
         assert duration < 0.1, f"Locations took {duration:.3f}s (expected < 0.1s)"
+
+
+@pytest.mark.slow
+class TestStatsPerformance:
+    """Performance tests for stats endpoints (DASH-3)."""
+
+    def test_stats_agents_under_100ms(self, client):
+        """Stats agents endpoint should respond in under 100ms."""
+        start = time.time()
+        response = client.get("/api/stats/agents")
+        duration = time.time() - start
+
+        assert response.status_code == 200
+        assert duration < 0.1, f"Stats agents took {duration:.3f}s (expected < 0.1s)"
+
+    def test_stats_events_under_100ms(self, client):
+        """Stats events endpoint should respond in under 100ms."""
+        start = time.time()
+        response = client.get("/api/stats/events")
+        duration = time.time() - start
+
+        assert response.status_code == 200
+        assert duration < 0.1, f"Stats events took {duration:.3f}s (expected < 0.1s)"
+
+    def test_stats_relationships_under_100ms(self, client):
+        """Stats relationships endpoint should respond in under 100ms."""
+        start = time.time()
+        response = client.get("/api/stats/relationships")
+        duration = time.time() - start
+
+        assert response.status_code == 200
+        assert duration < 0.1, f"Stats relationships took {duration:.3f}s (expected < 0.1s)"
+
+    def test_stats_simulation_under_50ms(self, client):
+        """Stats simulation endpoint should respond in under 50ms."""
+        start = time.time()
+        response = client.get("/api/stats/simulation")
+        duration = time.time() - start
+
+        assert response.status_code == 200
+        assert duration < 0.05, f"Stats simulation took {duration:.3f}s (expected < 0.05s)"
+
+
+@pytest.mark.slow
+class TestDashboardPerformance:
+    """Performance tests for dashboard endpoints (DASH-11 through DASH-15)."""
+
+    def test_dashboard_health_under_20ms(self, client):
+        """Dashboard health endpoint should respond in under 20ms."""
+        start = time.time()
+        response = client.get("/api/dashboard/health")
+        duration = time.time() - start
+
+        assert response.status_code == 200
+        assert duration < 0.02, f"Dashboard health took {duration:.3f}s (expected < 0.02s)"
+
+    def test_dashboard_positions_under_100ms(self, client):
+        """Dashboard positions endpoint should respond in under 100ms."""
+        start = time.time()
+        response = client.get("/api/dashboard/positions")
+        duration = time.time() - start
+
+        assert response.status_code == 200
+        assert duration < 0.1, f"Dashboard positions took {duration:.3f}s (expected < 0.1s)"
+
+    def test_dashboard_event_rates_under_200ms(self, client):
+        """Dashboard event rates endpoint should respond in under 200ms."""
+        start = time.time()
+        response = client.get("/api/dashboard/event-rates")
+        duration = time.time() - start
+
+        assert response.status_code == 200
+        assert duration < 0.2, f"Dashboard event-rates took {duration:.3f}s (expected < 0.2s)"
+
+    def test_dashboard_event_rates_large_window_under_500ms(self, client):
+        """Dashboard event rates with large window should respond in under 500ms."""
+        start = time.time()
+        response = client.get("/api/dashboard/event-rates?minutes=1440&bucket_size=60")
+        duration = time.time() - start
+
+        assert response.status_code == 200
+        assert duration < 0.5, f"Dashboard event-rates (24h) took {duration:.3f}s (expected < 0.5s)"
+
+    def test_dashboard_summary_under_150ms(self, client):
+        """Dashboard summary endpoint should respond in under 150ms."""
+        start = time.time()
+        response = client.get("/api/dashboard/summary")
+        duration = time.time() - start
+
+        assert response.status_code == 200
+        assert duration < 0.15, f"Dashboard summary took {duration:.3f}s (expected < 0.15s)"
