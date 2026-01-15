@@ -4,6 +4,8 @@ from hamlet.db.connection import SessionLocal, engine, get_db, init_db
 from hamlet.db.models import (
     Agent,
     Base,
+    ChatConversation,
+    ChatMessage,
     Event,
     Goal,
     LLMUsage,
@@ -34,6 +36,8 @@ __all__ = [
     "LLMUsage",
     "User",
     "RefreshToken",
+    "ChatConversation",
+    "ChatMessage",
     "seed_database",
     "reset_database",
 ]

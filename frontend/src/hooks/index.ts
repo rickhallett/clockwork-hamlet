@@ -28,3 +28,9 @@ export type { Digest, DigestHighlight } from './useDigest'
 
 export { useLocations } from './useLocations'
 export type { Location } from './useLocations'
+
+export { useChat, useChatHistory } from './useChat'
+export type { ChatMessage, ChatConversation, ChatConversationDetail } from './useChat'
+
+export { useAuth } from './useAuth'
+export type { User } from './useAuth'

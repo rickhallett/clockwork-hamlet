@@ -1,7 +1,10 @@
+import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Card, CardGrid, Badge } from '../components/common'
 import { TraitBars, RelationshipList, MemoryLog, GoalList } from '../components/agent'
+import { AgentChat } from '../components/chat'
 import { useAgent, useAgents } from '../hooks'
+import { useAuthContext } from '../context'
 
 export function AgentList() {
   const { agents, isLoading, error } = useAgents()
@@ -76,6 +79,8 @@ export function AgentList() {
 export function AgentProfile() {
   const { agentId } = useParams<{ agentId: string }>()
   const { agent, isLoading, error } = useAgent(agentId)
+  const { token } = useAuthContext()
+  const [showChat, setShowChat] = useState(false)
 
   if (isLoading) {
     return (
@@ -130,11 +135,29 @@ export function AgentProfile() {
                 "{agent.personality}"
               </p>
             )}
+
+            {/* Chat button */}
+            <button
+              onClick={() => setShowChat(!showChat)}
+              className="mt-4 w-full bg-accent-blue hover:bg-accent-blue/80 text-fg-primary px-4 py-2 rounded text-sm font-medium transition-colors"
+            >
+              {showChat ? 'Hide Chat' : `Chat with ${agent.name}`}
+            </button>
           </div>
         </Card>
 
         {/* Stats and info */}
         <div className="lg:col-span-2 space-y-4">
+          {/* Chat component */}
+          {showChat && agentId && (
+            <AgentChat
+              agentId={agentId}
+              agentName={agent.name}
+              authToken={token}
+              onClose={() => setShowChat(false)}
+            />
+          )}
+
           <Card title="Personality Traits">
             <TraitBars traits={agent.traits} />
           </Card>
