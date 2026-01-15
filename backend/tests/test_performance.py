@@ -164,3 +164,100 @@ class TestDashboardPerformance:
 
         assert response.status_code == 200
         assert duration < 0.15, f"Dashboard summary took {duration:.3f}s (expected < 0.15s)"
+
+
+@pytest.mark.slow
+class TestPollPerformance:
+    """Performance regression tests for poll endpoints (Phase 6.2 - Poll specific)."""
+
+    def test_polls_list_under_100ms(self, client):
+        """Poll list endpoint should respond in under 100ms."""
+        start = time.time()
+        response = client.get("/api/polls")
+        duration = time.time() - start
+
+        assert response.status_code == 200
+        assert duration < 0.1, f"Poll list took {duration:.3f}s (expected < 0.1s)"
+
+    def test_active_poll_under_100ms(self, client):
+        """Active poll endpoint should respond in under 100ms."""
+        start = time.time()
+        response = client.get("/api/polls/active")
+        duration = time.time() - start
+
+        assert response.status_code == 200
+        assert duration < 0.1, f"Active poll took {duration:.3f}s (expected < 0.1s)"
+
+    def test_create_poll_under_100ms(self, client):
+        """Poll creation should complete in under 100ms."""
+        poll_data = {
+            "question": "Performance test poll?",
+            "options": ["Yes", "No", "Maybe"],
+        }
+        start = time.time()
+        response = client.post("/api/polls", json=poll_data)
+        duration = time.time() - start
+
+        assert response.status_code == 201
+        assert duration < 0.1, f"Poll creation took {duration:.3f}s (expected < 0.1s)"
+
+    def test_vote_under_50ms(self, client):
+        """Single vote should complete in under 50ms."""
+        # Create poll first
+        poll_resp = client.post(
+            "/api/polls",
+            json={"question": "Vote perf test?", "options": ["A", "B"]},
+        )
+        poll_id = poll_resp.json()["id"]
+
+        start = time.time()
+        response = client.post(
+            "/api/polls/vote",
+            json={"poll_id": poll_id, "option": 0},
+        )
+        duration = time.time() - start
+
+        assert response.status_code == 200
+        assert duration < 0.05, f"Vote took {duration:.3f}s (expected < 0.05s)"
+
+    def test_agent_vote_under_200ms(self, client):
+        """Agent vote (with personality-based decision) should complete in under 200ms."""
+        # Create poll first
+        poll_resp = client.post(
+            "/api/polls",
+            json={
+                "question": "Agent vote perf test?",
+                "options": ["Investigate", "Wait cautiously", "Ignore"],
+                "category": "mystery",
+            },
+        )
+        poll_id = poll_resp.json()["id"]
+
+        start = time.time()
+        response = client.post(
+            f"/api/polls/{poll_id}/agent-vote",
+            json={"agent_id": "agnes"},
+        )
+        duration = time.time() - start
+
+        assert response.status_code == 200
+        assert duration < 0.2, f"Agent vote took {duration:.3f}s (expected < 0.2s)"
+
+    def test_bulk_agent_voting_under_500ms(self, client):
+        """Bulk agent voting should complete in under 500ms for all agents."""
+        # Create poll first
+        poll_resp = client.post(
+            "/api/polls",
+            json={
+                "question": "Bulk vote perf test?",
+                "options": ["Option A", "Option B", "Option C"],
+            },
+        )
+        poll_id = poll_resp.json()["id"]
+
+        start = time.time()
+        response = client.post(f"/api/polls/{poll_id}/agent-voting")
+        duration = time.time() - start
+
+        assert response.status_code == 200
+        assert duration < 0.5, f"Bulk agent voting took {duration:.3f}s (expected < 0.5s)"
