@@ -422,3 +422,184 @@ class TestChatIsolation:
             headers=headers2,
         )
         assert history.json()["total"] == 0
+
+
+@pytest.mark.unit
+class TestChatAPIContracts:
+    """Test API response schemas match expected contracts (Phase 4.2)."""
+
+    def test_chat_response_schema(self, client, auth_headers, mock_llm):
+        """Chat endpoint returns valid response schema."""
+        response = client.post(
+            "/api/agents/agnes/chat",
+            json={"message": "Hello!"},
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        data = response.json()
+
+        # Required fields
+        assert "message" in data
+        assert "agent_response" in data
+        assert "conversation_id" in data
+
+        # Message structure
+        msg = data["message"]
+        assert "role" in msg
+        assert "content" in msg
+        assert "timestamp" in msg
+        assert msg["role"] == "user"
+
+        # Agent response structure
+        agent_resp = data["agent_response"]
+        assert "role" in agent_resp
+        assert "content" in agent_resp
+        assert "timestamp" in agent_resp
+        assert "tokens_in" in agent_resp
+        assert "tokens_out" in agent_resp
+        assert "latency_ms" in agent_resp
+        assert agent_resp["role"] == "agent"
+
+        # Types
+        assert isinstance(data["conversation_id"], int)
+        assert isinstance(agent_resp["tokens_in"], int)
+        assert isinstance(agent_resp["tokens_out"], int)
+        assert isinstance(agent_resp["latency_ms"], (int, float))  # May be float
+
+    def test_history_response_schema(self, client, auth_headers, mock_llm):
+        """History endpoint returns valid response schema."""
+        # Create a conversation first
+        client.post(
+            "/api/agents/agnes/chat",
+            json={"message": "Hello!"},
+            headers=auth_headers,
+        )
+
+        response = client.get(
+            "/api/agents/agnes/chat/history",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        data = response.json()
+
+        # Required fields
+        assert "conversations" in data
+        assert "total" in data
+
+        # Types
+        assert isinstance(data["conversations"], list)
+        assert isinstance(data["total"], int)
+
+        # Conversation item structure
+        if data["conversations"]:
+            conv = data["conversations"][0]
+            assert "id" in conv
+            assert "agent_id" in conv
+            assert "is_active" in conv
+            assert "message_count" in conv
+            assert "created_at" in conv
+            assert "updated_at" in conv
+
+    def test_conversation_detail_schema(self, client, auth_headers, mock_llm):
+        """Conversation detail returns valid schema with messages."""
+        # Create a conversation
+        chat_resp = client.post(
+            "/api/agents/agnes/chat",
+            json={"message": "Hello!"},
+            headers=auth_headers,
+        )
+        conv_id = chat_resp.json()["conversation_id"]
+
+        response = client.get(
+            f"/api/agents/agnes/chat/{conv_id}",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        data = response.json()
+
+        # Required fields
+        assert "id" in data
+        assert "agent_id" in data
+        assert "messages" in data
+        assert "is_active" in data
+        assert "created_at" in data
+
+        # Messages array
+        assert isinstance(data["messages"], list)
+        assert len(data["messages"]) >= 2  # User + agent
+
+        # Each message has required fields
+        for msg in data["messages"]:
+            assert "role" in msg
+            assert "content" in msg
+            assert "timestamp" in msg
+
+
+@pytest.mark.slow
+class TestChatPerformance:
+    """Performance tests for chat endpoints (Phase 6.2)."""
+
+    def test_chat_response_under_500ms(self, client, auth_headers, mock_llm):
+        """Chat response should return in under 500ms (excluding LLM time).
+
+        Note: This uses MockLLMClient which returns instantly, so we're
+        measuring the API overhead only.
+        """
+        start_time = time.time()
+        response = client.post(
+            "/api/agents/agnes/chat",
+            json={"message": "Hello!"},
+            headers=auth_headers,
+        )
+        elapsed = time.time() - start_time
+
+        assert response.status_code == 200
+        assert elapsed < 0.5, f"Chat took {elapsed:.3f}s, expected < 0.5s"
+
+    def test_history_under_100ms(self, client, auth_headers, mock_llm):
+        """History endpoint should respond in under 100ms."""
+        # Create a few conversations first
+        for i in range(5):
+            client.post(
+                "/api/agents/agnes/chat",
+                json={"message": f"Message {i}"},
+                headers=auth_headers,
+            )
+
+        start_time = time.time()
+        response = client.get(
+            "/api/agents/agnes/chat/history",
+            headers=auth_headers,
+        )
+        elapsed = time.time() - start_time
+
+        assert response.status_code == 200
+        assert elapsed < 0.1, f"History took {elapsed:.3f}s, expected < 0.1s"
+
+    def test_conversation_detail_under_100ms(self, client, auth_headers, mock_llm):
+        """Conversation detail should respond in under 100ms."""
+        # Create conversation with multiple messages
+        chat_resp = client.post(
+            "/api/agents/agnes/chat",
+            json={"message": "Hello!"},
+            headers=auth_headers,
+        )
+        conv_id = chat_resp.json()["conversation_id"]
+
+        # Add more messages
+        for i in range(10):
+            client.post(
+                f"/api/agents/agnes/chat?conversation_id={conv_id}",
+                json={"message": f"Follow up {i}"},
+                headers=auth_headers,
+            )
+
+        start_time = time.time()
+        response = client.get(
+            f"/api/agents/agnes/chat/{conv_id}",
+            headers=auth_headers,
+        )
+        elapsed = time.time() - start_time
+
+        assert response.status_code == 200
+        assert elapsed < 0.1, f"Detail took {elapsed:.3f}s, expected < 0.1s"
