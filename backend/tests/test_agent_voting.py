@@ -343,29 +343,32 @@ class TestProcessAgentVotes:
         assert total_new_votes > total_initial
 
     def test_process_agent_votes_returns_decisions(self, db, test_poll):
-        """process_agent_votes returns list of VoteDecision objects."""
-        decisions = process_agent_votes(db, test_poll)
+        """process_agent_votes returns tuple of (decisions, agent_votes)."""
+        decisions, agent_votes = process_agent_votes(db, test_poll, create_memories=False)
 
         assert len(decisions) > 0
         assert all(isinstance(d, VoteDecision) for d in decisions)
+        assert isinstance(agent_votes, dict)
 
     def test_process_agent_votes_all_agents_vote(self, db, test_poll):
         """All agents in database vote."""
         all_agents = db.query(Agent).all()
-        decisions = process_agent_votes(db, test_poll)
+        decisions, agent_votes = process_agent_votes(db, test_poll, create_memories=False)
 
         # Should have one decision per agent
         assert len(decisions) == len(all_agents)
         voted_agents = {d.agent_id for d in decisions}
         expected_agents = {a.id for a in all_agents}
         assert voted_agents == expected_agents
+        # agent_votes should match
+        assert set(agent_votes.keys()) == expected_agents
 
     def test_process_agent_votes_specific_agents(
         self, db, test_poll, high_curiosity_agent, cautious_agent
     ):
         """Can specify which agents should vote."""
-        decisions = process_agent_votes(
-            db, test_poll, agents=[high_curiosity_agent, cautious_agent]
+        decisions, agent_votes = process_agent_votes(
+            db, test_poll, agents=[high_curiosity_agent, cautious_agent], create_memories=False
         )
 
         assert len(decisions) == 2
@@ -384,8 +387,9 @@ class TestProcessAgentVotes:
         db.add(inactive_poll)
         db.commit()
 
-        decisions = process_agent_votes(db, inactive_poll)
+        decisions, agent_votes = process_agent_votes(db, inactive_poll, create_memories=False)
         assert decisions == []
+        assert agent_votes == {}
 
 
 @pytest.mark.unit

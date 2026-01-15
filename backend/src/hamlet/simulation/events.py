@@ -17,6 +17,7 @@ class EventType(Enum):
     SYSTEM = "system"
     TICK = "tick"
     LLM_USAGE = "llm_usage"
+    POLL = "poll"  # Poll-related events (voting, closure, results)
 
 
 @dataclass
