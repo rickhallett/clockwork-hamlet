@@ -34,3 +34,11 @@ export type { ChatMessage, ChatConversation, ChatConversationDetail } from './us
 
 export { useAuth } from './useAuth'
 export type { User } from './useAuth'
+
+export { useDashboard } from './useDashboard'
+export type {
+  AgentPosition,
+  HealthMetrics,
+  LLMStats,
+  EventRates,
+} from './useDashboard'

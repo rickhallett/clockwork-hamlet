@@ -18,6 +18,8 @@ class EventType(Enum):
     TICK = "tick"
     LLM_USAGE = "llm_usage"
     POLL = "poll"  # Poll-related events (voting, closure, results)
+    POSITIONS = "positions"  # DASH-12: Agent position updates
+    HEALTH = "health"  # DASH-14: Simulation health updates
 
 
 @dataclass
