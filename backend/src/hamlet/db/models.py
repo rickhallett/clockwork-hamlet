@@ -110,6 +110,9 @@ class Agent(Base):
         foreign_keys="Relationship.target_id",
         back_populates="target",
     )
+    chat_conversations = relationship(
+        "ChatConversation", back_populates="agent", cascade="all, delete-orphan"
+    )
 
     @property
     def traits_dict(self) -> dict:
@@ -320,6 +323,9 @@ class User(Base):
     refresh_tokens = relationship(
         "RefreshToken", back_populates="user", cascade="all, delete-orphan"
     )
+    chat_conversations = relationship(
+        "ChatConversation", back_populates="user", cascade="all, delete-orphan"
+    )
 
     @property
     def preferences_dict(self) -> dict:
@@ -345,3 +351,50 @@ class RefreshToken(Base):
 
     # Relationships
     user = relationship("User", back_populates="refresh_tokens")
+
+
+class ChatConversation(Base):
+    """A chat conversation between a user and an agent."""
+
+    __tablename__ = "chat_conversations"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    agent_id = Column(String(50), ForeignKey("agents.id"), nullable=False)
+    created_at = Column(Float, nullable=False)  # Unix timestamp
+    updated_at = Column(Float, nullable=False)  # Unix timestamp
+    title = Column(String(255))  # Optional title for the conversation
+    is_active = Column(Boolean, default=True)  # For soft-delete/archiving
+
+    # Relationships
+    user = relationship("User", back_populates="chat_conversations")
+    agent = relationship("Agent", back_populates="chat_conversations")
+    messages = relationship(
+        "ChatMessage", back_populates="conversation", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        # Index for efficient lookup of user's conversations with an agent
+        # (Note: SQLite doesn't support explicit Index declarations here, but SQLAlchemy will create it)
+    )
+
+
+class ChatMessage(Base):
+    """A single message in a chat conversation."""
+
+    __tablename__ = "chat_messages"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    conversation_id = Column(Integer, ForeignKey("chat_conversations.id"), nullable=False)
+    role = Column(String(20), nullable=False)  # "user" or "agent"
+    content = Column(Text, nullable=False)
+    timestamp = Column(Float, nullable=False)  # Unix timestamp
+
+    # LLM usage tracking for agent responses
+    tokens_in = Column(Integer, default=0)
+    tokens_out = Column(Integer, default=0)
+    cost_usd = Column(Float, default=0.0)
+    latency_ms = Column(Float, default=0.0)
+
+    # Relationships
+    conversation = relationship("ChatConversation", back_populates="messages")

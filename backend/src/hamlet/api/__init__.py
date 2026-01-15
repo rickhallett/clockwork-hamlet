@@ -2,6 +2,7 @@
 
 from hamlet.api.agents import router as agents_router
 from hamlet.api.auth import router as auth_router
+from hamlet.api.chat import router as chat_router
 from hamlet.api.digest import router as digest_router
 from hamlet.api.events import router as events_router
 from hamlet.api.goals import router as goals_router
@@ -15,6 +16,7 @@ from hamlet.api.world import router as world_router
 __all__ = [
     "agents_router",
     "auth_router",
+    "chat_router",
     "digest_router",
     "events_router",
     "goals_router",
