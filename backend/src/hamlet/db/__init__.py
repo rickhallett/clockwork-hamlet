@@ -15,6 +15,7 @@ from hamlet.db.models import (
     RefreshToken,
     Relationship,
     User,
+    UserAgentQuota,
     WorldState,
 )
 from hamlet.db.seed import reset_database, seed_database
@@ -35,6 +36,7 @@ __all__ = [
     "WorldState",
     "LLMUsage",
     "User",
+    "UserAgentQuota",
     "RefreshToken",
     "ChatConversation",
     "ChatMessage",

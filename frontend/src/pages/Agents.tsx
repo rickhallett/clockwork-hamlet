@@ -44,11 +44,20 @@ export function AgentList() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-fg-primary mb-2">Village Agents</h1>
-        <p className="text-fg-secondary">
-          The inhabitants of Clockwork Hamlet, each with their own personality and goals.
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-fg-primary mb-2">Village Agents</h1>
+          <p className="text-fg-secondary">
+            The inhabitants of Clockwork Hamlet, each with their own personality and goals.
+          </p>
+        </div>
+        <Link
+          to="/agents/create"
+          className="px-4 py-2 bg-accent-cyan text-bg-primary rounded-lg font-medium hover:bg-accent-cyan/90 transition-colors flex items-center gap-2"
+        >
+          <span>+</span>
+          <span>Create Agent</span>
+        </Link>
       </div>
 
       <CardGrid columns={3}>

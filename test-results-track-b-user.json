@@ -1,0 +1,117 @@
+{
+  "agent": "track-b-user",
+  "ticket_id": "AUTH-TESTS",
+  "test_file": "tests/test_auth.py",
+  "summary": {
+    "total": 34,
+    "passed": 34,
+    "failed": 0,
+    "status": "SUCCESS"
+  },
+  "improvements_implemented": [
+    "Added API contract tests (TestAPIContracts) - 4 tests",
+    "Added performance tests (TestAuthPerformance) - 4 tests",
+    "Verified test markers (unit/integration/slow) in place",
+    "Verified Pydantic schemas use ConfigDict (no old Config class)",
+    "Verified pytest configuration includes markers and warnings filters"
+  ],
+  "test_classes": [
+    {
+      "name": "TestRegistration",
+      "marker": "integration",
+      "tests": [
+        {"name": "test_register_success", "status": "PASSED"},
+        {"name": "test_register_duplicate_username", "status": "PASSED"},
+        {"name": "test_register_duplicate_email", "status": "PASSED"},
+        {"name": "test_register_invalid_email", "status": "PASSED"},
+        {"name": "test_register_short_password", "status": "PASSED"},
+        {"name": "test_register_short_username", "status": "PASSED"}
+      ]
+    },
+    {
+      "name": "TestLogin",
+      "marker": "integration",
+      "tests": [
+        {"name": "test_login_success", "status": "PASSED"},
+        {"name": "test_login_wrong_password", "status": "PASSED"},
+        {"name": "test_login_nonexistent_user", "status": "PASSED"}
+      ]
+    },
+    {
+      "name": "TestTokenRefresh",
+      "marker": "integration",
+      "tests": [
+        {"name": "test_refresh_success", "status": "PASSED"},
+        {"name": "test_refresh_invalid_token", "status": "PASSED"},
+        {"name": "test_refresh_token_reuse_fails", "status": "PASSED"}
+      ]
+    },
+    {
+      "name": "TestLogout",
+      "marker": "integration",
+      "tests": [
+        {"name": "test_logout_success", "status": "PASSED"},
+        {"name": "test_logout_all_sessions", "status": "PASSED"}
+      ]
+    },
+    {
+      "name": "TestProtectedEndpoints",
+      "marker": "integration",
+      "tests": [
+        {"name": "test_get_current_user", "status": "PASSED"},
+        {"name": "test_get_current_user_no_token", "status": "PASSED"},
+        {"name": "test_get_current_user_invalid_token", "status": "PASSED"},
+        {"name": "test_update_user_email", "status": "PASSED"},
+        {"name": "test_change_password", "status": "PASSED"},
+        {"name": "test_change_password_wrong_current", "status": "PASSED"}
+      ]
+    },
+    {
+      "name": "TestPreferences",
+      "marker": "integration",
+      "tests": [
+        {"name": "test_get_default_preferences", "status": "PASSED"},
+        {"name": "test_update_preferences", "status": "PASSED"},
+        {"name": "test_preferences_persist", "status": "PASSED"}
+      ]
+    },
+    {
+      "name": "TestSecurityUtils",
+      "marker": "unit",
+      "tests": [
+        {"name": "test_password_hashing", "status": "PASSED"},
+        {"name": "test_token_creation_and_verification", "status": "PASSED"},
+        {"name": "test_invalid_token_verification", "status": "PASSED"}
+      ]
+    },
+    {
+      "name": "TestAPIContracts",
+      "marker": "integration",
+      "tests": [
+        {"name": "test_user_response_schema", "status": "PASSED"},
+        {"name": "test_token_response_schema", "status": "PASSED"},
+        {"name": "test_preferences_response_schema", "status": "PASSED"},
+        {"name": "test_error_response_schema", "status": "PASSED"}
+      ],
+      "note": "NEW - Added per test-improvement-plan.md Phase 4.2"
+    },
+    {
+      "name": "TestAuthPerformance",
+      "marker": "slow",
+      "tests": [
+        {"name": "test_login_under_500ms", "status": "PASSED"},
+        {"name": "test_token_refresh_under_200ms", "status": "PASSED"},
+        {"name": "test_get_profile_under_100ms", "status": "PASSED"},
+        {"name": "test_registration_under_500ms", "status": "PASSED"}
+      ],
+      "note": "NEW - Added per test-improvement-plan.md Phase 6.2"
+    }
+  ],
+  "duration_seconds": 24.63,
+  "coverage_phases_addressed": {
+    "phase_1_stabilize": "Already complete - 100% pass rate, warnings filtered",
+    "phase_3_categorize": "Already complete - pytest markers configured",
+    "phase_4_expand": "Added API contract tests (4.2)",
+    "phase_6_monitor": "Added performance baseline tests (6.2)"
+  }
+}

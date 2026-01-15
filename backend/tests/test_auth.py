@@ -421,3 +421,149 @@ class TestSecurityUtils:
 
         assert verify_token("invalid-token") is None
         assert verify_token("") is None
+
+
+@pytest.mark.integration
+class TestAPIContracts:
+    """Test API response schemas match expected contracts."""
+
+    def test_user_response_schema(self, client):
+        """User registration returns valid schema."""
+        response = create_test_user(client, "contractuser", "contract@example.com")
+        assert response.status_code == 201
+        data = response.json()
+
+        # Required fields
+        assert "id" in data
+        assert "username" in data
+        assert "email" in data
+        assert "is_active" in data
+        assert "is_admin" in data
+        assert "created_at" in data
+
+        # Types
+        assert isinstance(data["id"], int)
+        assert isinstance(data["username"], str)
+        assert isinstance(data["email"], str)
+        assert isinstance(data["is_active"], bool)
+        assert isinstance(data["is_admin"], bool)
+        assert isinstance(data["created_at"], (int, float))
+
+        # Security - password must not be exposed
+        assert "password" not in data
+        assert "hashed_password" not in data
+
+    def test_token_response_schema(self, client):
+        """Login returns valid token schema."""
+        create_test_user(client, "tokenuser", "token@example.com")
+        response = login_user(client, "tokenuser")
+        assert response.status_code == 200
+        data = response.json()
+
+        # Required fields
+        assert "access_token" in data
+        assert "refresh_token" in data
+        assert "token_type" in data
+
+        # Types
+        assert isinstance(data["access_token"], str)
+        assert isinstance(data["refresh_token"], str)
+        assert data["token_type"] == "bearer"
+
+        # Tokens should be non-empty
+        assert len(data["access_token"]) > 20
+        assert len(data["refresh_token"]) > 20
+
+    def test_preferences_response_schema(self, client):
+        """Preferences endpoint returns valid schema."""
+        create_test_user(client, "prefuser", "pref@example.com")
+        headers = get_auth_headers(client, "prefuser")
+
+        response = client.get("/api/auth/preferences", headers=headers)
+        assert response.status_code == 200
+        data = response.json()
+
+        # Required fields with defaults
+        assert "theme" in data
+        assert "notifications_enabled" in data
+        assert "sound_enabled" in data
+
+        # Types
+        assert isinstance(data["theme"], str)
+        assert isinstance(data["notifications_enabled"], bool)
+        assert isinstance(data["sound_enabled"], bool)
+
+    def test_error_response_schema(self, client):
+        """Error responses follow standard format."""
+        # Try invalid login
+        response = client.post(
+            "/api/auth/login",
+            data={"username": "nonexistent", "password": "wrong"},
+        )
+        assert response.status_code == 401
+        data = response.json()
+
+        # Standard error format
+        assert "detail" in data
+        assert isinstance(data["detail"], str)
+
+
+@pytest.mark.slow
+class TestAuthPerformance:
+    """Performance tests for auth endpoints."""
+
+    def test_login_under_500ms(self, client):
+        """Login should complete in under 500ms."""
+        import time
+
+        create_test_user(client, "perfuser", "perf@example.com")
+
+        start = time.time()
+        response = login_user(client, "perfuser")
+        duration = time.time() - start
+
+        assert response.status_code == 200
+        assert duration < 0.5, f"Login took {duration:.3f}s, expected < 0.5s"
+
+    def test_token_refresh_under_200ms(self, client):
+        """Token refresh should be fast."""
+        import time
+
+        create_test_user(client, "refreshperf", "refreshperf@example.com")
+        login_response = login_user(client, "refreshperf")
+        refresh_token = login_response.json()["refresh_token"]
+
+        start = time.time()
+        response = client.post(
+            "/api/auth/refresh",
+            json={"refresh_token": refresh_token},
+        )
+        duration = time.time() - start
+
+        assert response.status_code == 200
+        assert duration < 0.2, f"Refresh took {duration:.3f}s, expected < 0.2s"
+
+    def test_get_profile_under_100ms(self, client):
+        """Getting user profile should be very fast."""
+        import time
+
+        create_test_user(client, "profileperf", "profileperf@example.com")
+        headers = get_auth_headers(client, "profileperf")
+
+        start = time.time()
+        response = client.get("/api/auth/me", headers=headers)
+        duration = time.time() - start
+
+        assert response.status_code == 200
+        assert duration < 0.1, f"Profile fetch took {duration:.3f}s, expected < 0.1s"
+
+    def test_registration_under_500ms(self, client):
+        """Registration should complete in under 500ms."""
+        import time
+
+        start = time.time()
+        response = create_test_user(client, "regperf", "regperf@example.com")
+        duration = time.time() - start
+
+        assert response.status_code == 201
+        assert duration < 0.5, f"Registration took {duration:.3f}s, expected < 0.5s"
