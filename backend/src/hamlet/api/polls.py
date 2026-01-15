@@ -1,14 +1,21 @@
-"""Poll API routes."""
+"""Poll API routes.
 
+POLL-8: Poll results trigger reactive goals (via poll_integration)
+POLL-10: Memory creation for votes (via poll_integration)
+"""
+
+import asyncio
+import logging
 import time
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from hamlet.api.deps import get_db
 from hamlet.db import Agent, Poll
 from hamlet.schemas.poll import MultiVoteRequest, PollCreate, PollResponse
+from hamlet.simulation.poll_integration import on_poll_closed
 from hamlet.simulation.polls import (
     decide_vote,
     get_voting_summary,
@@ -16,6 +23,11 @@ from hamlet.simulation.polls import (
 )
 
 router = APIRouter(prefix="/api/polls", tags=["polls"])
+logger = logging.getLogger(__name__)
+
+# Store agent votes for recently closed polls to enable poll integration
+# In production, this would be stored in the database
+_recent_poll_votes: dict[int, dict[str, int]] = {}
 
 
 class VoteRequest(BaseModel):
@@ -25,14 +37,18 @@ class VoteRequest(BaseModel):
     option: int  # Index of the option
 
 
-def process_poll_schedules(db: Session) -> dict:
+async def process_poll_schedules_async(db: Session) -> dict:
     """Process poll schedules - open scheduled polls and close expired ones.
+
+    POLL-8/POLL-10: When polls close, triggers integration to create
+    memories and reactive goals for agents.
 
     Returns a summary of changes made.
     """
     now = int(time.time())
     opened = []
     closed = []
+    closed_polls = []
 
     # Open scheduled polls whose opens_at time has passed
     scheduled_polls = db.query(Poll).filter(Poll.status == "scheduled").all()
@@ -42,6 +58,56 @@ def process_poll_schedules(db: Session) -> dict:
             opened.append(poll.id)
 
     # Close active polls whose closes_at time has passed
+    active_polls = db.query(Poll).filter(Poll.status == "active").all()
+    for poll in active_polls:
+        if poll.closes_at and poll.closes_at <= now:
+            poll.status = "closed"
+            closed.append(poll.id)
+            closed_polls.append(poll)
+
+    if opened or closed:
+        db.commit()
+
+    # POLL-8/POLL-10: Process poll closures
+    for poll in closed_polls:
+        try:
+            # Get cached agent votes if available
+            agent_votes = _recent_poll_votes.pop(poll.id, {})
+            await on_poll_closed(poll, db, agent_votes)
+            logger.info(f"Processed poll closure integration for poll {poll.id}")
+        except Exception as e:
+            logger.error(f"Failed to process poll closure for {poll.id}: {e}")
+
+    return {"opened": opened, "closed": closed}
+
+
+def process_poll_schedules(db: Session) -> dict:
+    """Synchronous wrapper for process_poll_schedules_async.
+
+    For use in contexts where async is not available.
+    """
+    try:
+        loop = asyncio.get_running_loop()
+        # We're in an async context, create a task
+        # This won't work directly - need to return and let caller await
+        # For sync contexts, we'll use asyncio.run
+    except RuntimeError:
+        # No running loop - use asyncio.run
+        return asyncio.run(process_poll_schedules_async(db))
+
+    # If we're here, there's a running loop but we're called synchronously
+    # This shouldn't happen in FastAPI async endpoints
+    # Fall back to basic sync processing without integration
+    now = int(time.time())
+    opened = []
+    closed = []
+
+    scheduled_polls = db.query(Poll).filter(Poll.status == "scheduled").all()
+    for poll in scheduled_polls:
+        if poll.opens_at and poll.opens_at <= now:
+            poll.status = "active"
+            opened.append(poll.id)
+
     active_polls = db.query(Poll).filter(Poll.status == "active").all()
     for poll in active_polls:
         if poll.closes_at and poll.closes_at <= now:
@@ -59,9 +125,10 @@ async def get_active_poll(db: Session = Depends(get_db)):
     """Get the currently active poll.
 
     Automatically processes scheduled polls before returning.
+    POLL-8/POLL-10: Poll closure triggers memories and goals.
     """
-    # Process any pending schedule changes
-    process_poll_schedules(db)
+    # Process any pending schedule changes (async for full integration)
+    await process_poll_schedules_async(db)
 
     poll = db.query(Poll).filter(Poll.status == "active").first()
 
@@ -77,8 +144,9 @@ async def trigger_schedule_processing(db: Session = Depends(get_db)):
 
     Opens scheduled polls whose opens_at time has passed.
     Closes active polls whose closes_at time has passed.
+    POLL-8/POLL-10: Poll closure triggers memories and goals.
     """
-    result = process_poll_schedules(db)
+    result = await process_poll_schedules_async(db)
     return {
         "success": True,
         "polls_opened": result["opened"],
@@ -189,9 +257,12 @@ async def list_polls(
     category: str | None = None,
     db: Session = Depends(get_db),
 ):
-    """List all polls, optionally filtered by status and/or category."""
-    # Process schedules to ensure accurate status
-    process_poll_schedules(db)
+    """List all polls, optionally filtered by status and/or category.
+
+    POLL-8/POLL-10: Poll closure triggers memories and goals.
+    """
+    # Process schedules to ensure accurate status (async for full integration)
+    await process_poll_schedules_async(db)
 
     query = db.query(Poll)
     if status:
@@ -279,7 +350,11 @@ async def agent_vote(
     The agent's vote is determined probabilistically based on their personality
     traits and the poll options. Different traits influence voting differently
     depending on the poll category and option keywords.
+
+    POLL-10: Creates a memory for the agent about their vote.
     """
+    from hamlet.simulation.poll_integration import on_agent_vote
+
     poll = db.query(Poll).filter(Poll.id == poll_id).first()
     if not poll:
         raise HTTPException(status_code=404, detail=f"Poll {poll_id} not found")
@@ -299,7 +374,16 @@ async def agent_vote(
     option_key = str(decision.option_index)
     votes[option_key] = votes.get(option_key, 0) + 1
     poll.votes_dict = votes
+
+    # Cache vote for poll closure integration
+    if poll_id not in _recent_poll_votes:
+        _recent_poll_votes[poll_id] = {}
+    _recent_poll_votes[poll_id][agent.id] = decision.option_index
+
     db.commit()
+
+    # POLL-10: Create memory and publish event
+    await on_agent_vote(agent, decision, poll, db)
 
     return AgentVoteResponse(
         agent_id=decision.agent_id,
@@ -320,6 +404,8 @@ async def bulk_agent_voting(
     Each agent's vote is determined probabilistically based on their personality
     traits and the poll options. This endpoint processes all agents at once
     and returns a summary of voting patterns.
+
+    POLL-10: Creates memories for each agent about their vote.
     """
     poll = db.query(Poll).filter(Poll.id == poll_id).first()
     if not poll:
@@ -328,9 +414,12 @@ async def bulk_agent_voting(
     if poll.status != "active":
         raise HTTPException(status_code=400, detail="Poll is not active")
 
-    # Process all agent votes
-    decisions = process_agent_votes(db, poll)
+    # Process all agent votes (POLL-10: creates memories via create_memories=True)
+    decisions, agent_votes = process_agent_votes(db, poll, create_memories=True)
     summary = get_voting_summary(decisions)
+
+    # Cache votes for poll closure integration
+    _recent_poll_votes[poll_id] = agent_votes
 
     return AgentVotingResponse(
         poll_id=poll_id,

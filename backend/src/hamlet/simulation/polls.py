@@ -1,6 +1,7 @@
 """Agent voting simulation - agents vote on polls based on personality traits.
 
 POLL-9: Implement agent voting based on traits
+POLL-10: Memory creation for votes (integration)
 
 This module provides functionality for agents to vote on polls probabilistically
 based on their personality traits. Different poll categories and option keywords
@@ -11,10 +12,14 @@ each agent's unique personality.
 import logging
 import random
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from sqlalchemy.orm import Session
 
 from hamlet.db import Agent, Poll
+
+if TYPE_CHECKING:
+    from hamlet.simulation.poll_integration import on_agent_vote_sync
 
 logger = logging.getLogger(__name__)
 
@@ -311,38 +316,52 @@ def process_agent_votes(
     db: Session,
     poll: Poll,
     agents: list[Agent] | None = None,
-) -> list[VoteDecision]:
+    create_memories: bool = True,
+) -> tuple[list[VoteDecision], dict[str, int]]:
     """Process voting for all (or specified) agents on a poll.
 
     Each agent votes based on their personality traits. The votes are
     recorded in the poll's votes dictionary.
 
+    POLL-10: When create_memories is True, also creates memories for each vote.
+
     Args:
         db: Database session
         poll: The poll to vote on
         agents: Optional list of specific agents to vote. If None, all agents vote.
+        create_memories: Whether to create memories for votes (POLL-10)
 
     Returns:
-        List of VoteDecision objects for each agent's vote
+        Tuple of (list of VoteDecision objects, dict mapping agent_id to option_index)
     """
     if poll.status != "active":
         logger.warning(f"Poll {poll.id} is not active, skipping agent voting")
-        return []
+        return [], {}
 
     if agents is None:
         agents = db.query(Agent).all()
 
     decisions: list[VoteDecision] = []
+    agent_votes: dict[str, int] = {}  # Track what each agent voted for
     votes = poll.votes_dict
+
+    # Import here to avoid circular imports
+    if create_memories:
+        from hamlet.simulation.poll_integration import on_agent_vote_sync
 
     for agent in agents:
         try:
             decision = decide_vote(agent, poll)
             decisions.append(decision)
+            agent_votes[agent.id] = decision.option_index
 
             # Update vote count
             option_key = str(decision.option_index)
             votes[option_key] = votes.get(option_key, 0) + 1
+
+            # POLL-10: Create memory for this vote
+            if create_memories:
+                on_agent_vote_sync(agent, decision, poll, db)
 
             logger.info(
                 f"Agent {agent.name} voted for option {decision.option_index} "
@@ -355,7 +374,7 @@ def process_agent_votes(
     poll.votes_dict = votes
     db.commit()
 
-    return decisions
+    return decisions, agent_votes
 
 
 def get_voting_summary(decisions: list[VoteDecision]) -> dict:

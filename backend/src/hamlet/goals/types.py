@@ -39,6 +39,12 @@ class GoalType(str, Enum):
     THANK = "thank"  # Response to receiving help
     INVESTIGATE_EVENT = "investigate_event"  # Response to mysterious event
 
+    # POLL-RELATED REACTIVE - Response to poll results
+    DISCUSS_POLL_RESULT = "discuss_poll_result"  # Discuss poll outcome with others
+    CELEBRATE_POLL_WIN = "celebrate_poll_win"  # Celebrate when preferred option won
+    ACCEPT_POLL_LOSS = "accept_poll_loss"  # Come to terms with losing vote
+    IMPLEMENT_POLL_DECISION = "implement_poll_decision"  # Act on the poll's winning option
+
 
 # Goal category mappings
 NEEDS: list[GoalType] = [
@@ -67,6 +73,11 @@ REACTIVE: list[GoalType] = [
     GoalType.APOLOGIZE,
     GoalType.THANK,
     GoalType.INVESTIGATE_EVENT,
+    # Poll-related reactive goals
+    GoalType.DISCUSS_POLL_RESULT,
+    GoalType.CELEBRATE_POLL_WIN,
+    GoalType.ACCEPT_POLL_LOSS,
+    GoalType.IMPLEMENT_POLL_DECISION,
 ]
 
 
